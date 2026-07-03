@@ -1,3 +1,4 @@
 node_modules/
 notes/
 app-config.json
+dist/

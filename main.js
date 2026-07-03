@@ -6,7 +6,10 @@ const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-const CONFIG_PATH = path.join(__dirname, 'app-config.json');
+// ayarlar ve notlar ~/NotlarSync altinda (server.js ile ayni yer)
+const DATA_DIR = path.join(require('os').homedir(), 'NotlarSync');
+fs.mkdirSync(DATA_DIR, { recursive: true });
+const CONFIG_PATH = path.join(DATA_DIR, 'app-config.json');
 if (!fs.existsSync(CONFIG_PATH))
   fs.copyFileSync(path.join(__dirname, 'app-config.example.json'), CONFIG_PATH);
 const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));

@@ -4,16 +4,53 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "server": "node server.js"
+    "server": "node server.js",
+    "dist": "electron-builder"
   },
   "keywords": [],
-  "author": "",
+  "author": "Demir Ata Albuz <demirataalbuz@gmail.com>",
   "license": "ISC",
-  "description": "",
+  "description": "Iki PC arasi anlik senkron, Obsidian temali not uygulamasi",
   "dependencies": {
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "electron": "^41.7.1"
-  }
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.3",
+    "sharp": "^0.35.3"
+  },
+  "build": {
+    "appId": "com.demirata.notlarsync",
+    "productName": "Notlar Sync",
+    "files": [
+      "main.js",
+      "server.js",
+      "public/**",
+      "app-config.example.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Office",
+      "maintainer": "demirataalbuz@gmail.com",
+      "syncDesktopName": true
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    }
+  },
+  "homepage": "https://github.com/demirata/notlar-sync",
+  "desktopName": "notlar-sync.desktop"
 }

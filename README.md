@@ -7,25 +7,36 @@
 - WebSocket ile canlı senkron, kopunca otomatik yeniden bağlanır
 - Parola korumalı
 
-## Kurulum
+## Kurulum (kolay yol)
+
+[Releases](../../releases) sayfasından işletim sistemine uygun dosyayı indir:
+
+- **Windows:** `.exe` — çift tıkla, kurulur
+- **Linux:** `.AppImage` (çalıştırılabilir yap, çift tıkla) veya `.deb`
+- **macOS:** `.dmg`
+
+İlk açılışta her şey otomatik hazırlanır: notların ve ayar dosyan ev dizininde `~/NotlarSync` klasörüne oluşturulur. Parolayı `~/NotlarSync/app-config.json` içinden değiştirmeyi unutma!
+
+## Kurulum (kaynak koddan)
 
 ```bash
 git clone <repo-url> && cd notlar-sync
 npm install
-cp app-config.example.json app-config.json   # parolayı değiştir!
 npm start
 ```
+
+Ayar dosyası ilk açılışta `~/NotlarSync/app-config.json` olarak oluşur.
 
 ## İki PC'yi bağlama
 
 Bir PC **host** olur (sunucu onun içinde çalışır), diğerleri **client** olarak bağlanır.
 
-**Host PC** — `app-config.json`:
+**Host PC** — `~/NotlarSync/app-config.json`:
 ```json
 { "mode": "host", "password": "guclu-bir-parola" }
 ```
 
-**Client PC** — `app-config.json`:
+**Client PC** — `~/NotlarSync/app-config.json`:
 ```json
 { "mode": "client", "server": "http://HOST_ADRESI:7777" }
 ```

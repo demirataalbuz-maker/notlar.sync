@@ -6,11 +6,14 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 
 const PORT = 7777;
-const NOTES_DIR = path.join(__dirname, 'notes');
-if (!fs.existsSync(NOTES_DIR)) fs.mkdirSync(NOTES_DIR);
 
-// config yoksa ornekten olustur
-const CONFIG_PATH = path.join(__dirname, 'app-config.json');
+// veriler kullanicinin ev dizininde: paketli uygulamada __dirname salt-okunur (asar)
+const DATA_DIR = path.join(require('os').homedir(), 'NotlarSync');
+const NOTES_DIR = path.join(DATA_DIR, 'notes');
+fs.mkdirSync(NOTES_DIR, { recursive: true });
+
+// config yoksa ornekten olustur (ilk acilis)
+const CONFIG_PATH = path.join(DATA_DIR, 'app-config.json');
 if (!fs.existsSync(CONFIG_PATH))
   fs.copyFileSync(path.join(__dirname, 'app-config.example.json'), CONFIG_PATH);
 const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
