@@ -32,6 +32,9 @@ const notePath = (n) => path.join(NOTES_DIR, n + '.md');
 const latest = {};
 const saveTimers = {};
 
+// tarayici eklentisinin yakaladigi sifreler — SADECE RAM, diske/git'e asla yazilmaz
+let pending = [];
+
 function listNotes() {
   return fs.readdirSync(NOTES_DIR)
     .filter(f => f.endsWith('.md'))
@@ -153,6 +156,28 @@ function handleApi(req, res, url) {
       const chunks = []; let size = 0;
       req.on('data', (c) => { chunks.push(c); size += c.length; if (size > 20e6) req.destroy(); });
       req.on('end', () => { fs.writeFileSync(VAULT_PATH, Buffer.concat(chunks)); txt(200, 'kaydedildi'); });
+      return;
+    }
+  }
+
+  // --- tarayici eklentisi: yakalanan sifreler icin GECICI kuyruk ---
+  // SADECE RAM'de tutulur, diske/git'e ASLA yazilmaz. Uygulama kilidi acikken
+  // kullaniciya "kasaya ekle?" diye sorar, onaylaninca sifrelenip kasaya girer, kuyruk temizlenir.
+  if (url.pathname === '/api/vault-pending') {
+    if (req.method === 'GET') return txt(200, JSON.stringify(pending), 'application/json');
+    if (req.method === 'DELETE') { pending = []; return txt(200, 'temizlendi'); }
+    if (req.method === 'POST') {
+      const chunks = [];
+      req.on('data', (c) => chunks.push(c));
+      req.on('end', () => {
+        let it; try { it = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return txt(400, 'gecersiz'); }
+        if (!it || !it.password) return txt(400, 'sifre yok');
+        // ayni site+kullanici zaten kuyruktaysa tekrar ekleme
+        if (!pending.some((p) => p.url === it.url && p.username === it.username && p.password === it.password))
+          pending.push({ url: String(it.url || '').slice(0, 300), username: String(it.username || '').slice(0, 200), password: String(it.password).slice(0, 500) });
+        if (pending.length > 50) pending.shift(); // ust sinir
+        txt(200, 'kuyruga alindi');
+      });
       return;
     }
   }

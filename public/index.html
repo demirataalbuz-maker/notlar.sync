@@ -213,6 +213,7 @@
       <button class="sBtn" id="vUnlock" style="width:100%">Kasayı aç</button>
     </div>
     <div id="vOpen" style="display:none">
+      <div id="vPending" style="display:none;background:#2c2a1a;border:1px solid #6b5d1f;border-radius:8px;padding:10px 12px;margin-bottom:8px"></div>
       <div class="row">
         <input id="vSearch" placeholder="Ara...">
         <button class="miniBtn" id="vLock">🔒 Kilitle</button>
@@ -503,11 +504,42 @@ $('vUnlock').onclick = async () => {
     vPass = m;
     if (!vBlobStr) await saveVault();                               // yeni kasayi olustur
     $('vLocked').style.display = 'none'; $('vOpen').style.display = '';
-    renderVault();
+    renderVault(); startPendingPoll();
   } catch { $('vErr').textContent = 'Ana parola yanlış (ya da kasa bozuk).'; }
 };
 $('vMaster').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('vUnlock').click(); });
-$('vLock').onclick = () => { vEntries = null; vPass = null; $('vOpen').style.display = 'none'; $('vLocked').style.display = ''; $('vMaster').value = ''; };
+$('vLock').onclick = () => { vEntries = null; vPass = null; stopPendingPoll(); $('vOpen').style.display = 'none'; $('vLocked').style.display = ''; $('vMaster').value = ''; };
+
+// --- tarayici eklentisinden yakalanan sifreler: kilit acikken sor ---
+let pendingTimer = null;
+async function checkPending() {
+  if (!vEntries) return;
+  let items = [];
+  try { items = await (await fetch('/api/vault-pending' + apiQ())).json(); } catch { return; }
+  const box = $('vPending');
+  if (!items.length) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  box.innerHTML = '<div style="font-size:13px;margin-bottom:8px">🔐 Tarayıcıdan <b>' + items.length + '</b> şifre yakalandı — kasaya eklensin mi?</div>';
+  items.forEach((it) => {
+    const d = document.createElement('div');
+    d.className = 'mono'; d.style.marginBottom = '3px';
+    d.textContent = '• ' + (it.url || '?') + '  (' + (it.username || '—') + ')';
+    box.appendChild(d);
+  });
+  const acts = document.createElement('div'); acts.className = 'row'; acts.style.marginTop = '8px';
+  const add = document.createElement('button'); add.className = 'sBtn'; add.textContent = 'Kasaya ekle';
+  add.onclick = async () => {
+    items.forEach((it) => vEntries.push({ title: (it.url || 'Site').replace(/^https?:\/\//, '').split('/')[0], url: it.url || '', username: it.username || '', password: it.password, note: 'tarayıcıdan' }));
+    await saveVault();
+    await fetch('/api/vault-pending' + apiQ(), { method: 'DELETE' });
+    box.style.display = 'none'; renderVault();
+  };
+  const skip = document.createElement('button'); skip.className = 'miniBtn'; skip.textContent = 'Yoksay';
+  skip.onclick = async () => { await fetch('/api/vault-pending' + apiQ(), { method: 'DELETE' }); box.style.display = 'none'; };
+  acts.append(add, skip); box.appendChild(acts);
+}
+function startPendingPoll() { stopPendingPoll(); checkPending(); pendingTimer = setInterval(checkPending, 4000); }
+function stopPendingPoll() { if (pendingTimer) { clearInterval(pendingTimer); pendingTimer = null; } $('vPending').style.display = 'none'; }
 $('vSearch').oninput = renderVault;
 $('eGen').onclick = () => { $('ePass').value = VAULT.genPassword(20); };
 $('eAdd').onclick = async () => {

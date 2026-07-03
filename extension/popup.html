@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<style>
+  body { width: 280px; background: #1e1e1e; color: #dadada; font-family: system-ui, sans-serif; padding: 14px; margin: 0; }
+  h1 { font-size: 15px; margin: 0 0 12px; }
+  label { font-size: 12px; color: #999; display: block; margin: 10px 0 4px; }
+  input { width: 100%; box-sizing: border-box; background: #262626; border: 1px solid #3f3f3f; color: #dadada; border-radius: 6px; padding: 8px; font-size: 13px; outline: none; }
+  input:focus { border-color: #7f6df2; }
+  button { width: 100%; margin-top: 12px; background: #7f6df2; color: #fff; border: none; border-radius: 6px; padding: 9px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  #ok { color: #2ecc71; font-size: 12px; min-height: 16px; margin-top: 8px; text-align: center; }
+  p { font-size: 11px; color: #777; line-height: 1.5; margin-top: 12px; }
+</style>
+</head>
+<body>
+  <h1>🔐 Notlar Sync</h1>
+  <label>Kasa adresi (host)</label>
+  <input id="host" placeholder="http://localhost:7777">
+  <label>Parola (varsa)</label>
+  <input id="key" type="password" placeholder="boş bırakılabilir">
+  <button id="save">Kaydet</button>
+  <div id="ok"></div>
+  <p>Yakaladığın şifreler uygulama açık ve kasa kilidi açıkken onayınla kasaya eklenir.</p>
+  <script src="popup.js"></script>
+</body>
+</html>

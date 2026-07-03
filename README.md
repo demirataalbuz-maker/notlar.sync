@@ -79,6 +79,17 @@ curl -X POST "http://HOST:7777/api/note/AI-Hafiza?key=PAROLA&append=1" -d "satı
 
 API'den yazılanlar, notu açık tutan tüm editörlerde **anında** belirir. Ajanlarının her oturumda "yaptığın işi `AI-Hafiza` notuna logla" talimatını alması için global talimat dosyasına (Claude Code: `~/.claude/CLAUDE.md`, Codex: `~/.codex/AGENTS.md`) kısa bir protokol bloğu ekle — örneği repo wiki'sinde.
 
+## Tarayıcı eklentisi (web şifrelerini yakala)
+
+`extension/` klasöründeki eklenti, web sitelerine girdiğin şifreleri Google gibi "kaydedeyim mi?" diye sorup kasaya ekler. **Sistem-geneli dinleme (keylogger) yoktur** — sadece tarayıcı formlarına takılır ve her zaman önce sana sorar.
+
+Kurulum (Chrome/Edge/Brave):
+1. `chrome://extensions` → sağ üstten **Geliştirici modu**'nu aç
+2. **Paketlenmemiş öğe yükle** → `notlar-sync/extension` klasörünü seç
+3. Eklenti simgesine tıkla → kasa adresini (`http://localhost:7777` veya host'un Tailscale adresi) ve parolanı gir
+
+Bir siteye giriş yapınca "Kaydet?" banner'ı çıkar. Kabul edersen şifre, **uygulama açık ve kasa kilidi açıkken** onayınla kasaya eklenir. Yakalanan şifre yalnızca sunucunun RAM'inde geçici durur; diske/git'e asla yazılmaz.
+
 ## Tarayıcıdan kullanım
 
 Electron şart değil — host çalışırken herhangi bir cihazdan `http://HOST_ADRESI:7777` açman yeterli. Sunucuyu tek başına çalıştırmak için: `npm run server`
