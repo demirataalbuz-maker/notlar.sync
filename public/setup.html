@@ -114,6 +114,7 @@ function guncelle() {
   if (busy) return;
   durum((st) => {
     const b = $('ana');
+    b.disabled = false; // mesgul degiliz: onceki adimdan kalan pasiflik kalksin
     if (st.state === 'Running') {
       $('durum').innerHTML = '✅ Bağlı! Bu cihazın kalıcı adresi: <span id="ip">' + st.ip + '</span>'
         + (q.get('mode') === 'host'
