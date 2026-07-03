@@ -65,11 +65,12 @@ function autoPush() {
   if (!config.gitAutoPush) return;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => {
-    // parolali config asla repoya girmesin
+    // parola/kasa ASLA repoya girmesin
     const gi = path.join(DATA_DIR, '.gitignore');
-    const cur = fs.existsSync(gi) ? fs.readFileSync(gi, 'utf8') : '';
-    if (!cur.split('\n').includes('app-config.json'))
-      fs.writeFileSync(gi, cur + (cur && !cur.endsWith('\n') ? '\n' : '') + 'app-config.json\n');
+    let cur = fs.existsSync(gi) ? fs.readFileSync(gi, 'utf8') : '';
+    for (const must of ['app-config.json', 'vault.enc'])
+      if (!cur.split('\n').includes(must)) cur += (cur && !cur.endsWith('\n') ? '\n' : '') + must + '\n';
+    fs.writeFileSync(gi, cur);
     exec('git add -A && (git diff --cached --quiet || git commit -m "oto-kayit") && git push -u origin HEAD',
       { cwd: DATA_DIR }, (e, out, err) => {
         if (e) console.log('git push olmadi:', (err || '').trim().split('\n')[0]);
@@ -99,6 +100,26 @@ function makePairCode(cb) {
   });
 }
 
+// local Ollama'ya istek (varsa). /no_think ile qwen3 dusunmeden hizli cevap verir.
+function askOllama(model, prompt, cb) {
+  const payload = JSON.stringify({ model, prompt, stream: false, think: false });
+  const r = http.request({
+    host: '127.0.0.1', port: 11434, path: '/api/generate', method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+    timeout: 120000,
+  }, (resp) => {
+    let d = '';
+    resp.on('data', (c) => d += c);
+    resp.on('end', () => {
+      try { cb(null, (JSON.parse(d).response || '').trim()); }
+      catch { cb('cevap cozulemedi'); }
+    });
+  });
+  r.on('error', (e) => cb(e.code === 'ECONNREFUSED' ? 'Ollama calismiyor (ollama serve)' : e.message));
+  r.on('timeout', () => { r.destroy(); cb('zaman asimi'); });
+  r.end(payload);
+}
+
 // --- REST API (AI'lar icin): ?key=PAROLA ile ---
 // GET  /api/notes            -> not listesi (JSON)
 // GET  /api/note/ISIM        -> not icerigi (duz metin)
@@ -119,6 +140,41 @@ function handleApi(req, res, url) {
 
   if (url.pathname === '/api/pair-code' && req.method === 'GET')
     return makePairCode((code) => txt(200, code));
+
+  // --- sifreli kasa deposu (sifir-bilgi: sunucu blob'u saklar, icini ACAMAZ) ---
+  // sifreleme/cozme istemcide (Web Crypto). blob ana parolayla sifreli, gitignored.
+  const VAULT_PATH = path.join(DATA_DIR, 'vault.enc');
+  if (url.pathname === '/api/vault') {
+    if (req.method === 'GET') {
+      if (!fs.existsSync(VAULT_PATH)) return txt(404, '');
+      return txt(200, fs.readFileSync(VAULT_PATH, 'utf8'), 'application/json');
+    }
+    if (req.method === 'POST') {
+      const chunks = []; let size = 0;
+      req.on('data', (c) => { chunks.push(c); size += c.length; if (size > 20e6) req.destroy(); });
+      req.on('end', () => { fs.writeFileSync(VAULT_PATH, Buffer.concat(chunks)); txt(200, 'kaydedildi'); });
+      return;
+    }
+  }
+
+  // --- local AI (Ollama) proxy: ceviri + yardim ---
+  if (url.pathname === '/api/ai' && req.method === 'POST') {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      let body;
+      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return txt(400, 'gecersiz'); }
+      const model = body.model || 'qwen3:8b'; // ceviri kalitesi icin daha iyi model
+      const prompt = body.mode === 'translate'
+        ? 'Translate the following text to Turkish. Output ONLY the Turkish translation, no explanations, no notes:\n\n' + (body.text || '')
+        : (body.text || '');
+      askOllama(model, prompt, (err, out) => {
+        if (err) return txt(502, 'AI yok/kapali: ' + err);
+        txt(200, out, 'text/plain');
+      });
+    });
+    return;
+  }
 
   const m = url.pathname.match(/^\/api\/note\/(.+)$/);
   if (!m) return txt(404, 'yok');

@@ -34,12 +34,37 @@
     display: flex; justify-content: space-between; align-items: center;
     border-bottom: 1px solid var(--border);
   }
-  #newBtn, #setBtn {
+  #newBtn, #setBtn, #vaultBtn, #toolsBtn, #aiBtn {
     background: none; border: none; color: var(--accent);
     font-size: 20px; cursor: pointer; line-height: 1;
   }
   #setBtn { font-size: 17px; color: var(--muted); }
+  #vaultBtn, #toolsBtn, #aiBtn { font-size: 15px; }
   #newBtn:hover, #setBtn:hover { color: #a396ff; }
+
+  /* araclar penceresi ortak stil (ayarlarla ayni kart) */
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 20; }
+  .modalCard {
+    width: 560px; max-width: 92vw; max-height: 86vh; overflow-y: auto;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .modalCard h2 { font-size: 17px; display: flex; justify-content: space-between; align-items: center; }
+  .modalCard input, .modalCard select, .modalCard textarea {
+    background: var(--bg1); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 11px; border-radius: 7px; font-size: 14px; outline: none; width: 100%;
+    font-family: inherit;
+  }
+  .modalCard input:focus, .modalCard select:focus, .modalCard textarea:focus { border-color: var(--accent); }
+  .modalCard textarea { resize: vertical; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .kapatX { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+  .vEntry { background: var(--bg1); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; }
+  .vEntry .vt { font-weight: 600; font-size: 14px; }
+  .vEntry .vu { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-all; }
+  .mono { font-family: monospace; font-size: 12px; word-break: break-all; }
+  .miniBtn { background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .miniBtn:hover { background: var(--accent); color: #fff; }
 
   /* --- ayarlar penceresi --- */
   #settings {
@@ -147,6 +172,9 @@
   </div>
   <div id="sidebar">
     <header>Notlar <span style="display:flex;gap:10px">
+      <button id="vaultBtn" title="Şifre kasası">🔐</button>
+      <button id="toolsBtn" title="Kodlama araçları">🧰</button>
+      <button id="aiBtn" title="Çeviri / AI">🤖</button>
       <button id="setBtn" title="Ayarlar">⚙</button>
       <button id="newBtn" title="Yeni not">+</button>
     </span></header>
@@ -174,12 +202,76 @@
       </div>
     </div>
   </div>
+  <!-- ŞİFRE KASASI -->
+  <div id="vault" class="modal"><div class="modalCard">
+    <h2>🔐 Şifre Kasası <button class="kapatX" data-close="vault">✕</button></h2>
+    <div id="vLocked">
+      <p style="font-size:13px;color:var(--muted)">Ana parola ile açılır. Şifreleme cihazında yapılır; sunucu içeriği göremez.</p>
+      <div id="vNew" style="display:none;font-size:13px;color:#e0b050">İlk kez: güçlü bir ana parola belirle. <b>Unutursan kasa açılmaz</b> (geri kurtarma yok).</div>
+      <input id="vMaster" type="password" placeholder="Ana parola" style="margin-top:8px">
+      <div id="vErr" style="color:#e74c3c;font-size:13px;min-height:16px"></div>
+      <button class="sBtn" id="vUnlock" style="width:100%">Kasayı aç</button>
+    </div>
+    <div id="vOpen" style="display:none">
+      <div class="row">
+        <input id="vSearch" placeholder="Ara...">
+        <button class="miniBtn" id="vLock">🔒 Kilitle</button>
+      </div>
+      <div id="vList"></div>
+      <div class="sBlok" style="border-top:1px solid var(--border);padding-top:12px">
+        <h3>Ekle</h3>
+        <div class="row" style="margin-bottom:6px"><input id="eTitle" placeholder="Başlık (ör. GitHub)"><input id="eUrl" placeholder="site (opsiyonel)"></div>
+        <div class="row" style="margin-bottom:6px"><input id="eUser" placeholder="kullanıcı adı / e-posta"></div>
+        <div class="row"><input id="ePass" placeholder="şifre"><button class="miniBtn" id="eGen">🎲 Üret</button><button class="sBtn" id="eAdd">Kaydet</button></div>
+      </div>
+      <div class="sBlok" style="border-top:1px solid var(--border);padding-top:12px">
+        <h3>Toplu içe aktar (tek tek yazma)</h3>
+        <p style="font-size:12px;color:var(--muted)">Chrome/Firefox/Bitwarden vb. → şifreleri CSV olarak dışa aktar → buraya yükle.</p>
+        <input id="vCsv" type="file" accept=".csv">
+      </div>
+    </div>
+  </div></div>
+
+  <!-- KODLAMA ARAÇLARI -->
+  <div id="tools" class="modal"><div class="modalCard">
+    <h2>🧰 Kodlama / Şifre Araçları <button class="kapatX" data-close="tools">✕</button></h2>
+    <textarea id="tIn" rows="4" placeholder="Metni buraya yaz..."></textarea>
+    <div class="row">
+      <select id="tSel"></select>
+      <input id="tOpt" placeholder="" style="display:none;max-width:160px">
+    </div>
+    <div class="row">
+      <button class="sBtn" id="tEnc">→ Çevir (encode)</button>
+      <button class="sBtn gri" id="tDec">← Çöz (decode)</button>
+      <button class="miniBtn" id="tMagic">✨ Sihirli çöz</button>
+    </div>
+    <textarea id="tOut" rows="4" readonly placeholder="Sonuç..."></textarea>
+    <button class="miniBtn" id="tCopy" style="align-self:flex-start">Kopyala</button>
+  </div></div>
+
+  <!-- ÇEVİRİ / AI -->
+  <div id="ai" class="modal"><div class="modalCard">
+    <h2>🤖 Çeviri / AI <span style="font-size:11px;color:var(--muted)">local Ollama</span> <button class="kapatX" data-close="ai">✕</button></h2>
+    <textarea id="aIn" rows="4" placeholder="İngilizce metin (çeviri) veya AI'a soru..."></textarea>
+    <div class="row">
+      <select id="aModel"><option value="qwen3:8b">qwen3:8b (kaliteli)</option><option value="qwen2.5:3b">qwen2.5:3b (hızlı)</option></select>
+    </div>
+    <div class="row">
+      <button class="sBtn" id="aTrans">🇬🇧→🇹🇷 Çevir</button>
+      <button class="sBtn gri" id="aAsk">AI'a sor</button>
+    </div>
+    <textarea id="aOut" rows="6" readonly placeholder="Cevap..."></textarea>
+    <button class="miniBtn" id="aCopy" style="align-self:flex-start">Kopyala</button>
+  </div></div>
+
   <div id="main">
     <div id="titlebar"></div>
     <textarea id="editor" placeholder="Yazmaya başla..." style="display:none" spellcheck="false"></textarea>
     <div id="empty"><div style="font-size:40px">🗒️</div>Soldan bir not seç veya + ile yeni not aç</div>
   </div>
 
+<script src="tools.js"></script>
+<script src="vault.js"></script>
 <script>
 let ws, current = null, notes = [];
 let loaded = false;  // acik notun icerigi sunucudan geldi mi (gelmeden yazilan tus eski notu tasimasin)
@@ -350,6 +442,131 @@ $('kopyalaBtn').onclick = () => {
     setTimeout(() => { $('kopyalaBtn').textContent = 'Kopyala'; }, 1500);
   });
 };
+
+// --- ortak: pencere ac/kapa + authed fetch ---
+const apiQ = (extra) => (key ? '?key=' + encodeURIComponent(key) + (extra ? '&' + extra : '') : (extra ? '?' + extra : ''));
+function openModal(id) { $(id).style.display = 'flex'; }
+document.querySelectorAll('[data-close]').forEach((b) => b.onclick = () => { $(b.dataset.close).style.display = 'none'; });
+document.querySelectorAll('.modal').forEach((m) => m.onclick = (e) => { if (e.target === m) m.style.display = 'none'; });
+async function copyEl(id, btn) {
+  await navigator.clipboard.writeText($(id).value);
+  const t = btn.textContent; btn.textContent = 'Kopyalandı ✓'; setTimeout(() => btn.textContent = t, 1200);
+}
+
+// --- ŞİFRE KASASI ---
+let vEntries = null, vPass = null, vBlobStr = null;
+$('vaultBtn').onclick = async () => {
+  openModal('vault');
+  $('vOpen').style.display = 'none'; $('vLocked').style.display = ''; $('vErr').textContent = '';
+  $('vMaster').value = ''; $('vMaster').focus();
+  try {
+    const r = await fetch('/api/vault' + apiQ());
+    vBlobStr = r.ok ? await r.text() : null;
+  } catch { vBlobStr = null; }
+  $('vNew').style.display = vBlobStr ? 'none' : ''; // kasa yoksa "ilk kez" uyarisi
+};
+async function saveVault() {
+  const blob = await VAULT.encrypt(vEntries, vPass);
+  vBlobStr = blob;
+  await fetch('/api/vault' + apiQ(), { method: 'POST', body: blob });
+}
+function renderVault() {
+  const q = ($('vSearch').value || '').toLowerCase();
+  const box = $('vList'); box.innerHTML = '';
+  vEntries.forEach((e, i) => {
+    if (q && !(e.title + e.username + e.url).toLowerCase().includes(q)) return;
+    const d = document.createElement('div'); d.className = 'vEntry';
+    const head = document.createElement('div'); head.className = 'row'; head.style.justifyContent = 'space-between';
+    const info = document.createElement('div');
+    info.innerHTML = '<div class="vt"></div><div class="vu"></div>';
+    info.querySelector('.vt').textContent = e.title;
+    info.querySelector('.vu').textContent = [e.username, e.url].filter(Boolean).join(' · ');
+    const acts = document.createElement('div'); acts.className = 'row';
+    const cp = document.createElement('button'); cp.className = 'miniBtn'; cp.textContent = 'Şifreyi kopyala';
+    cp.onclick = () => { navigator.clipboard.writeText(e.password); cp.textContent = 'Kopyalandı ✓'; setTimeout(() => cp.textContent = 'Şifreyi kopyala', 1200); };
+    const sh = document.createElement('button'); sh.className = 'miniBtn'; sh.textContent = '👁';
+    const pw = document.createElement('div'); pw.className = 'mono'; pw.style.display = 'none'; pw.style.marginTop = '6px'; pw.textContent = e.password;
+    sh.onclick = () => { pw.style.display = pw.style.display === 'none' ? '' : 'none'; };
+    const del = document.createElement('button'); del.className = 'miniBtn'; del.textContent = '🗑';
+    del.onclick = async () => { vEntries.splice(i, 1); await saveVault(); renderVault(); };
+    acts.append(sh, cp, del);
+    head.append(info, acts); d.append(head, pw); box.appendChild(d);
+  });
+  if (!box.children.length) box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Kayıt yok. Aşağıdan ekle veya CSV içe aktar.</div>';
+}
+$('vUnlock').onclick = async () => {
+  const m = $('vMaster').value; if (!m) return;
+  $('vErr').textContent = '';
+  try {
+    if (vBlobStr) { vEntries = await VAULT.decrypt(vBlobStr, m); }   // mevcut kasa
+    else { vEntries = []; }                                          // yeni kasa
+    vPass = m;
+    if (!vBlobStr) await saveVault();                               // yeni kasayi olustur
+    $('vLocked').style.display = 'none'; $('vOpen').style.display = '';
+    renderVault();
+  } catch { $('vErr').textContent = 'Ana parola yanlış (ya da kasa bozuk).'; }
+};
+$('vMaster').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('vUnlock').click(); });
+$('vLock').onclick = () => { vEntries = null; vPass = null; $('vOpen').style.display = 'none'; $('vLocked').style.display = ''; $('vMaster').value = ''; };
+$('vSearch').oninput = renderVault;
+$('eGen').onclick = () => { $('ePass').value = VAULT.genPassword(20); };
+$('eAdd').onclick = async () => {
+  const p = $('ePass').value; if (!p || !$('eTitle').value) return;
+  vEntries.push({ title: $('eTitle').value, url: $('eUrl').value, username: $('eUser').value, password: p, note: '' });
+  await saveVault(); renderVault();
+  ['eTitle', 'eUrl', 'eUser', 'ePass'].forEach((id) => $(id).value = '');
+};
+$('vCsv').onchange = (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = async () => {
+    const imported = VAULT.parseCSV(rd.result);
+    if (!imported.length) { alert('CSV\'de şifre bulunamadı.'); return; }
+    vEntries.push(...imported); await saveVault(); renderVault();
+    alert(imported.length + ' şifre içe aktarıldı.');
+    $('vCsv').value = '';
+  };
+  rd.readAsText(f);
+};
+
+// --- KODLAMA ARAÇLARI ---
+$('tSel').innerHTML = TOOLS.names.map((n) => '<option>' + n + '</option>').join('');
+function tOptSync() {
+  const lbl = TOOLS.optLabel($('tSel').value);
+  $('tOpt').style.display = lbl ? '' : 'none';
+  if (lbl) $('tOpt').placeholder = lbl;
+}
+$('tSel').onchange = tOptSync; tOptSync();
+$('toolsBtn').onclick = () => openModal('tools');
+async function tRun(dir) {
+  try { $('tOut').value = await TOOLS.run($('tSel').value, dir, $('tIn').value, $('tOpt').value); }
+  catch (e) { $('tOut').value = '⚠ ' + e.message; }
+}
+$('tEnc').onclick = () => tRun('enc');
+$('tDec').onclick = () => tRun('dec');
+$('tMagic').onclick = async () => {
+  const res = await TOOLS.magic($('tIn').value);
+  $('tOut').value = res.length ? res.map((x) => '[' + x.name + '] ' + x.r).join('\n') : '(okunabilir çözüm bulunamadı)';
+};
+$('tCopy').onclick = () => copyEl('tOut', $('tCopy'));
+
+// --- ÇEVİRİ / AI ---
+$('aiBtn').onclick = () => openModal('ai');
+async function aiCall(mode, btn) {
+  const text = $('aIn').value.trim(); if (!text) return;
+  const t = btn.textContent; btn.textContent = 'Çalışıyor...'; btn.disabled = true; $('aOut').value = '';
+  try {
+    const r = await fetch('/api/ai' + apiQ(), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode, text, model: $('aModel').value }),
+    });
+    $('aOut').value = await r.text();
+  } catch (e) { $('aOut').value = '⚠ ' + e.message; }
+  btn.textContent = t; btn.disabled = false;
+}
+$('aTrans').onclick = () => aiCall('translate', $('aTrans'));
+$('aAsk').onclick = () => aiCall('chat', $('aAsk'));
+$('aCopy').onclick = () => copyEl('aOut', $('aCopy'));
 
 // Electron window.prompt desteklemiyor -> inline input
 $('newBtn').onclick = () => {
