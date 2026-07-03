@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Notlar Sync — Kurulum</title>
+<style>
+  :root { --bg1:#1e1e1e; --bg2:#262626; --border:#3f3f3f; --text:#dadada; --muted:#999; --accent:#7f6df2; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg1); color: var(--text);
+    font-family: 'Segoe UI', Ubuntu, sans-serif;
+    height: 100vh; display:flex; align-items:center; justify-content:center;
+  }
+  #card { width: 480px; text-align:center; display:flex; flex-direction:column; gap:16px; }
+  h1 { font-size:20px; }
+  p  { font-size:14px; color:var(--muted); line-height:1.6; }
+  .btn {
+    background: var(--accent); color:#fff; border:none; border-radius:8px;
+    padding: 12px 18px; font-size:15px; cursor:pointer; font-weight:600;
+  }
+  .btn:hover { background:#9184ff; }
+  .btn.gri { background:var(--bg2); color:var(--muted); border:1px solid var(--border); font-weight:400; }
+  .btn:disabled { opacity:.5; cursor:wait; }
+  #durum {
+    background:var(--bg2); border:1px solid var(--border); border-radius:8px;
+    padding:12px; font-size:13px; color:var(--muted); min-height:44px;
+  }
+  #ip { color:#2ecc71; font-weight:700; font-size:16px; }
+  code { background:var(--bg2); padding:2px 6px; border-radius:4px; font-size:12px; user-select:all; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<div id="card">
+  <div style="font-size:44px">🌐</div>
+  <h1>Cihazlar internet üzerinden eşleşsin mi?</h1>
+  <p>Notlar Sync farklı ağlardaki cihazlarını <b>Tailscale</b> ile birbirine bağlar:
+  port açmadan, şifreli, ücretsiz. İki cihazına da kurup aynı hesapla girmen yeterli.</p>
+  <div id="durum">Durum kontrol ediliyor...</div>
+  <button class="btn" id="ana" style="display:none"></button>
+  <button class="btn gri" id="atla">Atla — sadece yerel ağda kullan</button>
+</div>
+
+<script>
+const { execFile, exec } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const { ipcRenderer } = require('electron');
+
+const q = new URLSearchParams(location.search);
+const CONFIG_PATH = q.get('config');
+const $ = (id) => document.getElementById(id);
+let busy = false;
+
+function openUrl(u) {
+  const cmd = process.platform === 'win32' ? 'start ""' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  exec(cmd + ' "' + u + '"');
+}
+
+function bitti() { ipcRenderer.send('setup-done'); }
+
+$('atla').onclick = () => {
+  try {
+    const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    c.tailscaleSkip = true; // bir daha sorma; fikrin degisirse config'den bu satiri sil
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2));
+  } catch {}
+  bitti();
+};
+
+function durum(cb) {
+  execFile('tailscale', ['status', '--json'], (e, out) => {
+    try {
+      const s = JSON.parse(out);
+      cb({ state: s.BackendState || 'bilinmiyor', ip: ((s.Self && s.Self.TailscaleIPs) || [])[0] || '' });
+    } catch { cb({ state: 'yok', ip: '' }); }
+  });
+}
+
+function kur() {
+  if (process.platform !== 'linux') {
+    // win/mac: resmi indirme sayfasina yonlendir, sessiz kurulum denemesi yok
+    openUrl('https://tailscale.com/download');
+    $('durum').textContent = 'İndirme sayfası açıldı. Kurduktan sonra bu ekran kendini güncelleyecek.';
+    return;
+  }
+  busy = true; $('ana').disabled = true;
+  $('durum').textContent = 'Kuruluyor... (sistem parolanı soracak)';
+  exec("pkexec sh -c 'curl -fsSL https://tailscale.com/install.sh | sh'", (e, out, err) => {
+    busy = false; $('ana').disabled = false;
+    if (e) $('durum').textContent = 'Kurulamadı: ' + (err || e.message).split('\n')[0]
+      + ' — Terminalden de kurabilirsin: curl -fsSL https://tailscale.com/install.sh | sh';
+    guncelle();
+  });
+}
+
+function girisYap() {
+  busy = true; $('ana').disabled = true;
+  $('durum').textContent = 'Bağlanılıyor... giriş linki tarayıcıda açılacak, orada onayla.';
+  const user = os.userInfo().username;
+  // --operator: bundan sonra tailscale komutlari root istemesin
+  const child = exec('pkexec tailscale up --operator=' + user, () => { busy = false; guncelle(); });
+  let seen = '';
+  const scan = (d) => {
+    seen += d;
+    const m = seen.match(/https:\/\/login\.tailscale\.com\/\S+/);
+    if (m) { openUrl(m[0]); $('durum').innerHTML = 'Tarayıcıda onay bekleniyor... Link açılmadıysa: <code>' + m[0] + '</code>'; seen = ''; }
+  };
+  child.stdout.on('data', scan);
+  child.stderr.on('data', scan);
+}
+
+function guncelle() {
+  if (busy) return;
+  durum((st) => {
+    const b = $('ana');
+    if (st.state === 'Running') {
+      $('durum').innerHTML = '✅ Bağlı! Bu cihazın kalıcı adresi: <span id="ip">' + st.ip + '</span>'
+        + (q.get('mode') === 'host'
+          ? '<br>Diğer cihazında bu adresi kullan: <code>http://' + st.ip + ':7777</code>'
+          : '<br>Host cihazındaki IP\'yi config\'e yazmayı unutma.');
+      b.style.display = ''; b.textContent = 'Devam et →'; b.onclick = bitti;
+      return;
+    }
+    if (st.state === 'yok') {
+      $('durum').textContent = 'Tailscale bu cihazda kurulu değil.';
+      b.style.display = ''; b.textContent = process.platform === 'linux' ? 'Tailscale\'i kur (tek tık)' : 'İndirme sayfasını aç';
+      b.onclick = kur;
+      return;
+    }
+    // NeedsLogin, Stopped, vb.
+    $('durum').textContent = 'Tailscale kurulu ama bağlı değil (durum: ' + st.state + ').';
+    b.style.display = ''; b.textContent = 'Giriş yap & bağlan'; b.onclick = girisYap;
+  });
+}
+
+guncelle();
+setInterval(guncelle, 3000); // kur/giris disarida tamamlanirsa ekran kendini yakalar
+</script>
+</body>
+</html>
