@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notlar Sync</title>
+<style>
+  /* Obsidian koyu tema renkleri */
+  :root {
+    --bg1: #1e1e1e;      /* editor arkaplan */
+    --bg2: #262626;      /* sidebar */
+    --bg3: #363636;      /* hover */
+    --border: #3f3f3f;
+    --text: #dadada;
+    --muted: #999;
+    --accent: #7f6df2;   /* obsidian moru */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg1); color: var(--text);
+    font-family: 'Segoe UI', Ubuntu, sans-serif;
+    height: 100vh; display: flex; overflow: hidden;
+  }
+
+  /* --- sidebar --- */
+  #sidebar {
+    width: 260px; min-width: 260px; background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  #sidebar header {
+    padding: 12px 14px; font-size: 13px; font-weight: 600;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 1px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  #newBtn {
+    background: none; border: none; color: var(--accent);
+    font-size: 20px; cursor: pointer; line-height: 1;
+  }
+  #newBtn:hover { color: #a396ff; }
+  #noteList { flex: 1; overflow-y: auto; padding: 6px; }
+  .note-item {
+    padding: 7px 10px; border-radius: 5px; cursor: pointer;
+    font-size: 14px; display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 2px;
+  }
+  .note-item:hover { background: var(--bg3); }
+  .note-item.active { background: var(--accent); color: #fff; }
+  .del {
+    visibility: hidden; background: none; border: none;
+    color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
+  }
+  .note-item:hover .del { visibility: visible; }
+  .del:hover { opacity: 1; }
+
+  #status {
+    padding: 8px 14px; font-size: 12px; color: var(--muted);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 7px;
+  }
+  #dot { width: 8px; height: 8px; border-radius: 50%; background: #e74c3c; }
+  #dot.on { background: #2ecc71; }
+
+  /* --- editor --- */
+  #main { flex: 1; display: flex; flex-direction: column; }
+  #titlebar {
+    padding: 14px 34px 6px; font-size: 22px; font-weight: 700;
+    color: var(--text); min-height: 48px;
+  }
+  #editor {
+    flex: 1; background: var(--bg1); color: var(--text);
+    border: none; outline: none; resize: none;
+    padding: 10px 34px 34px; font-size: 16px; line-height: 1.7;
+    font-family: 'Segoe UI', Ubuntu, sans-serif;
+    caret-color: var(--accent);
+  }
+  #empty {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 15px; flex-direction: column; gap: 10px;
+  }
+  ::-webkit-scrollbar { width: 9px; }
+  ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 5px; }
+
+  /* --- parola ekrani --- */
+  #login {
+    position: fixed; inset: 0; background: var(--bg1);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px; z-index: 10;
+  }
+  #login input {
+    background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 14px; border-radius: 6px; font-size: 15px; width: 260px;
+    outline: none; text-align: center;
+  }
+  #login input:focus { border-color: var(--accent); }
+  #loginErr { color: #e74c3c; font-size: 13px; min-height: 18px; }
+
+  /* --- yeni not girisi --- */
+  #newRow { display: none; padding: 6px; }
+  #newRow input {
+    width: 100%; background: var(--bg1); border: 1px solid var(--accent);
+    color: var(--text); padding: 6px 9px; border-radius: 5px;
+    font-size: 14px; outline: none;
+  }
+</style>
+</head>
+<body>
+  <div id="login">
+    <div style="font-size:40px">🔒</div>
+    <input id="loginInput" type="password" placeholder="Parola" autofocus>
+    <div id="loginErr"></div>
+  </div>
+  <div id="sidebar">
+    <header>Notlar <button id="newBtn" title="Yeni not">+</button></header>
+    <div id="newRow"><input id="newInput" placeholder="Not adı, Enter'a bas"></div>
+    <div id="noteList"></div>
+    <div id="status"><span id="dot"></span><span id="statusText">Bağlanıyor...</span></div>
+  </div>
+  <div id="main">
+    <div id="titlebar"></div>
+    <textarea id="editor" placeholder="Yazmaya başla..." style="display:none" spellcheck="false"></textarea>
+    <div id="empty"><div style="font-size:40px">🗒️</div>Soldan bir not seç veya + ile yeni not aç</div>
+  </div>
+
+<script>
+let ws, current = null, notes = [];
+const $ = (id) => document.getElementById(id);
+
+// --- parola ---
+let key = localStorage.getItem('key');
+if (key) { $('login').style.display = 'none'; }
+$('loginInput').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !$('loginInput').value) return;
+  key = $('loginInput').value;
+  localStorage.setItem('key', key);
+  $('login').style.display = 'none';
+  connect();
+});
+
+function connect() {
+  if (!key) return; // once parola
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/?key=' + encodeURIComponent(key));
+  ws.onopen = () => { $('dot').classList.add('on'); $('statusText').textContent = 'Bağlı — anlık senkron açık'; };
+  ws.onclose = (e) => {
+    $('dot').classList.remove('on');
+    if (e.code === 4001) {
+      // parola yanlis -> tekrar sor
+      localStorage.removeItem('key'); key = null;
+      $('login').style.display = ''; $('loginInput').value = '';
+      $('loginErr').textContent = 'Parola yanlış, tekrar dene'; $('loginInput').focus();
+      $('statusText').textContent = 'Parola bekleniyor';
+      return;
+    }
+    $('statusText').textContent = 'Koptu, tekrar deniyor...';
+    setTimeout(connect, 1500);
+  };
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'list') { notes = m.notes; renderList(); }
+    if (m.type === 'content' && m.name === current) {
+      const ed = $('editor');
+      if (ed.value !== m.content) {
+        // imleci koru
+        const pos = ed.selectionStart;
+        ed.value = m.content;
+        ed.selectionStart = ed.selectionEnd = Math.min(pos, m.content.length);
+      }
+    }
+  };
+}
+connect();
+
+function renderList() {
+  const list = $('noteList');
+  list.innerHTML = '';
+  for (const n of notes) {
+    const div = document.createElement('div');
+    div.className = 'note-item' + (n === current ? ' active' : '');
+    const span = document.createElement('span');
+    span.textContent = n;
+    const del = document.createElement('button');
+    del.className = 'del'; del.textContent = '✕'; del.title = 'Sil';
+    del.onclick = (ev) => {
+      ev.stopPropagation();
+      if (confirm('"' + n + '" silinsin mi?')) {
+        ws.send(JSON.stringify({ type: 'delete', name: n }));
+        if (current === n) closeNote();
+      }
+    };
+    div.append(span, del);
+    div.onclick = () => openNote(n);
+    list.appendChild(div);
+  }
+}
+
+function openNote(name) {
+  current = name;
+  $('titlebar').textContent = name;
+  $('empty').style.display = 'none';
+  $('editor').style.display = '';
+  $('editor').focus();
+  ws.send(JSON.stringify({ type: 'open', name }));
+  renderList();
+}
+
+function closeNote() {
+  current = null;
+  $('titlebar').textContent = '';
+  $('editor').style.display = 'none';
+  $('editor').value = '';
+  $('empty').style.display = '';
+  renderList();
+}
+
+$('editor').addEventListener('input', () => {
+  if (!current || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ type: 'edit', name: current, content: $('editor').value }));
+});
+
+// Electron window.prompt desteklemiyor -> inline input
+$('newBtn').onclick = () => {
+  $('newRow').style.display = 'block';
+  $('newInput').focus();
+};
+$('newInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { $('newRow').style.display = 'none'; $('newInput').value = ''; }
+  if (e.key !== 'Enter') return;
+  const name = $('newInput').value.trim();
+  if (!name) return;
+  ws.send(JSON.stringify({ type: 'create', name }));
+  $('newRow').style.display = 'none'; $('newInput').value = '';
+  setTimeout(() => openNote(name), 200);
+});
+</script>
+</body>
+</html>

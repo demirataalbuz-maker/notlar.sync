@@ -1,0 +1,5 @@
+{
+  "mode": "host",
+  "server": "http://localhost:7777",
+  "password": "degistir-beni"
+}
