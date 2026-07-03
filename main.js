@@ -69,14 +69,15 @@ function openSetup(status) {
   sw.loadFile(path.join(__dirname, 'public', 'setup.html'), {
     query: { state: status.state, ip: status.ip, mode: config.mode, config: CONFIG_PATH },
   });
-  ipcMain.once('setup-done', () => { done = true; openMain(); if (!sw.isDestroyed()) sw.close(); });
+  // kurulum bittiginde config degismis olabilir (host -> client eslesme),
+  // temiz yeniden baslat: yeni surec dogru modu/adresi okur
+  ipcMain.once('setup-done', () => { done = true; app.relaunch(); app.exit(0); });
   sw.on('closed', () => { if (!done) openMain(); }); // X'e basarsa bu seferlik atla
 }
 
 app.whenReady().then(() => {
-  tailscaleStatus((st) => {
-    if (st.state === 'Running' || config.tailscaleSkip) openMain();
-    else openSetup(st);
-  });
+  // setup bir kez calisir; bittikten sonra (setupDone) veya kullanici atladiysa direkt ana pencere
+  if (config.setupDone || config.tailscaleSkip) return openMain();
+  tailscaleStatus((st) => openSetup(st));
 });
 app.on('window-all-closed', () => app.quit());

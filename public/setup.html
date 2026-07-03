@@ -28,6 +28,13 @@
   #ip { color:#2ecc71; font-weight:700; font-size:16px; }
   code { background:var(--bg2); padding:2px 6px; border-radius:4px; font-size:12px; user-select:all; }
   a { color:var(--accent); }
+  .sep { color:var(--muted); font-size:12px; margin:4px 0; }
+  #kod {
+    width:100%; background:var(--bg2); border:1px solid var(--border); color:var(--text);
+    border-radius:7px; padding:9px; font-family:monospace; font-size:12px; resize:none;
+    margin-bottom:8px; outline:none;
+  }
+  #kod:focus { border-color:var(--accent); }
 </style>
 </head>
 <body>
@@ -39,6 +46,14 @@
   <div id="durum">Durum kontrol ediliyor...</div>
   <button class="btn" id="ana" style="display:none"></button>
   <button class="btn gri" id="atla">Atla — sadece yerel ağda kullan</button>
+
+  <div class="sep">— veya —</div>
+  <div id="pairWrap">
+    <p style="margin-bottom:8px">Zaten bir ana cihazın mı var? Oradaki <b>Ayarlar → Bağlantı kodu</b>'nu yapıştır:</p>
+    <textarea id="kod" rows="2" placeholder="NTLR1-..."></textarea>
+    <button class="btn" id="baglanBtn">Bu koda bağlan</button>
+    <div id="pairErr" style="color:#e74c3c;font-size:13px;min-height:16px"></div>
+  </div>
 </div>
 
 <script>
@@ -57,15 +72,37 @@ function openUrl(u) {
   exec(cmd + ' "' + u + '"');
 }
 
-function bitti() { ipcRenderer.send('setup-done'); }
+function patchConfig(fn) {
+  let c = {};
+  try { c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch {}
+  fn(c);
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2));
+}
+function bitti() { patchConfig((c) => { c.setupDone = true; }); ipcRenderer.send('setup-done'); }
 
 $('atla').onclick = () => {
-  try {
-    const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-    c.tailscaleSkip = true; // bir daha sorma; fikrin degisirse config'den bu satiri sil
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2));
-  } catch {}
+  patchConfig((c) => { c.tailscaleSkip = true; }); // bir daha sorma; fikrin degisirse config'den sil
   bitti();
+};
+
+// kod ile baglan: NTLR1-<base64url({s,p})> -> client config yaz
+$('baglanBtn').onclick = () => {
+  const raw = $('kod').value.trim();
+  $('pairErr').textContent = '';
+  try {
+    if (!raw.startsWith('NTLR1-')) throw 0;
+    const p = JSON.parse(Buffer.from(raw.slice(6), 'base64url').toString('utf8'));
+    if (!p.s) throw 0;
+    patchConfig((c) => {
+      c.mode = 'client';
+      c.server = p.s;
+      c.password = p.p || '';
+      c.setupDone = true;
+    });
+    bitti(); // main yeniden baslatir, artik bu adrese baglanir
+  } catch {
+    $('pairErr').textContent = 'Kod geçersiz. Ana cihazdaki Ayarlar → Bağlantı kodu\'ndan kopyala.';
+  }
 };
 
 function durum(cb) {

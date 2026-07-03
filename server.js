@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const { WebSocketServer } = require('ws');
 
 const PORT = Number(process.env.PORT) || 7777;
@@ -77,6 +77,28 @@ function autoPush() {
   }, config.gitPushDelayMs || 30000); // son degisiklikten 30sn sonra tek seferde
 }
 
+// host'un baglanti adresi: once tailscale (100.x) IP, yoksa LAN IP
+function getHostAddress(cb) {
+  execFile('tailscale', ['ip', '-4'], (e, out) => {
+    const ip = (out || '').trim().split('\n')[0];
+    if (ip) return cb(ip);
+    const nets = require('os').networkInterfaces();
+    for (const name of Object.keys(nets))
+      for (const net of nets[name])
+        if (net.family === 'IPv4' && !net.internal) return cb(net.address);
+    cb('localhost');
+  });
+}
+
+// bu host'a baglanmak icin tek kod: adres + parola tek stringte paketli
+// baska cihaz bunu setup ekranina yapistirinca kendini client olarak ayarlar
+function makePairCode(cb) {
+  getHostAddress((addr) => {
+    const payload = JSON.stringify({ s: 'http://' + addr + ':' + PORT, p: PASSWORD });
+    cb('NTLR1-' + Buffer.from(payload, 'utf8').toString('base64url'));
+  });
+}
+
 // --- REST API (AI'lar icin): ?key=PAROLA ile ---
 // GET  /api/notes            -> not listesi (JSON)
 // GET  /api/note/ISIM        -> not icerigi (duz metin)
@@ -94,6 +116,9 @@ function handleApi(req, res, url) {
 
   if (url.pathname === '/api/notes' && req.method === 'GET')
     return txt(200, JSON.stringify(listNotes()), 'application/json');
+
+  if (url.pathname === '/api/pair-code' && req.method === 'GET')
+    return makePairCode((code) => txt(200, code));
 
   const m = url.pathname.match(/^\/api\/note\/(.+)$/);
   if (!m) return txt(404, 'yok');
