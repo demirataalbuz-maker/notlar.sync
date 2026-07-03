@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 
-const PORT = 7777;
+const PORT = Number(process.env.PORT) || 7777;
 
 // veriler kullanicinin ev dizininde: paketli uygulamada __dirname salt-okunur (asar)
 const DATA_DIR = path.join(require('os').homedir(), 'NotlarSync');
@@ -17,7 +17,7 @@ const CONFIG_PATH = path.join(DATA_DIR, 'app-config.json');
 if (!fs.existsSync(CONFIG_PATH))
   fs.copyFileSync(path.join(__dirname, 'app-config.example.json'), CONFIG_PATH);
 const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-const PASSWORD = config.password || 'degistir-beni';
+const PASSWORD = config.password ?? 'degistir-beni'; // "" = parola kapali
 
 // --- yardimcilar ---
 const safeName = (n) => n.replace(/[^a-zA-Z0-9ğüşöçıİĞÜŞÖÇ _\-.]/g, '').trim();
@@ -56,8 +56,9 @@ function broadcast(msg, except) {
 
 wss.on('connection', (ws, req) => {
   // parola kontrolu: ws://host:7777/?key=PAROLA
-  const key = new URL(req.url, 'http://x').searchParams.get('key');
-  if (key !== PASSWORD) { ws.close(4001, 'parola yanlis'); return; }
+  // config'de password bos ("") birakilirsa parola sorulmaz
+  const key = new URL(req.url, 'http://x').searchParams.get('key') || '';
+  if (PASSWORD && key !== PASSWORD) { ws.close(4001, 'parola yanlis'); return; }
 
   ws.send(JSON.stringify({ type: 'list', notes: listNotes() }));
 
@@ -99,6 +100,7 @@ wss.on('connection', (ws, req) => {
   });
 });
 
+wss.on('error', () => {}); // hata mesaji http server handler'inda
 server.on('error', (e) => {
   if (e.code === 'EADDRINUSE') console.log('Port ' + PORT + ' zaten kullaniliyor, mevcut sunucuya baglanilacak.');
   else throw e;

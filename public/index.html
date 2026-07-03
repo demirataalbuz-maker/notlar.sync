@@ -106,7 +106,7 @@
 </style>
 </head>
 <body>
-  <div id="login">
+  <div id="login" style="display:none">
     <div style="font-size:40px">🔒</div>
     <input id="loginInput" type="password" placeholder="Parola" autofocus>
     <div id="loginErr"></div>
@@ -127,9 +127,8 @@
 let ws, current = null, notes = [];
 const $ = (id) => document.getElementById(id);
 
-// --- parola ---
-let key = localStorage.getItem('key');
-if (key) { $('login').style.display = 'none'; }
+// --- parola: once parolasiz/hatirlanan anahtarla dene, sunucu reddederse sor ---
+let key = localStorage.getItem('key') || '';
 $('loginInput').addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || !$('loginInput').value) return;
   key = $('loginInput').value;
@@ -139,16 +138,17 @@ $('loginInput').addEventListener('keydown', (e) => {
 });
 
 function connect() {
-  if (!key) return; // once parola
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/?key=' + encodeURIComponent(key));
   ws.onopen = () => { $('dot').classList.add('on'); $('statusText').textContent = 'Bağlı — anlık senkron açık'; };
   ws.onclose = (e) => {
     $('dot').classList.remove('on');
     if (e.code === 4001) {
-      // parola yanlis -> tekrar sor
-      localStorage.removeItem('key'); key = null;
-      $('login').style.display = ''; $('loginInput').value = '';
-      $('loginErr').textContent = 'Parola yanlış, tekrar dene'; $('loginInput').focus();
+      // parola gerekli / yanlis -> sor
+      const hadKey = !!key;
+      localStorage.removeItem('key'); key = '';
+      $('login').style.display = 'flex'; $('loginInput').value = '';
+      $('loginErr').textContent = hadKey ? 'Parola yanlış, tekrar dene' : '';
+      $('loginInput').focus();
       $('statusText').textContent = 'Parola bekleniyor';
       return;
     }

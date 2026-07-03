@@ -5,7 +5,7 @@
 - Electron masaüstü uygulaması, koyu tema
 - Notlar düz `.md` dosyası olarak saklanır (`notes/` klasörü)
 - WebSocket ile canlı senkron, kopunca otomatik yeniden bağlanır
-- Parola korumalı
+- Parola korumalı (istersen kapatılabilir: config'de `"password": ""`)
 
 ## Kurulum (kolay yol)
 
