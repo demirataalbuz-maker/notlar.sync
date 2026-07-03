@@ -7,9 +7,13 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write # release olusturma/asset yukleme icin sart
+
 jobs:
   build:
     strategy:
+      fail-fast: false # bir OS patlarsa digerleri yine de cikssin
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
@@ -18,6 +22,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # package.json versiyonunu tag'den al: v1.2.3 -> 1.2.3
+      # (yoksa asset'ler eski versiyon adiyla yanlis release'e gider)
+      - run: npm version --no-git-tag-version "${GITHUB_REF_NAME#v}"
+        shell: bash
       - run: npm ci
       - run: npx electron-builder --publish always
         env:

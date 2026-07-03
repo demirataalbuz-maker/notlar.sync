@@ -53,6 +53,7 @@
   }
   .note-item:hover .del { visibility: visible; }
   .del:hover { opacity: 1; }
+  .del.armed { visibility: visible; color: #ff6b5e; opacity: 1; font-weight: 700; }
 
   #status {
     padding: 8px 14px; font-size: 12px; color: var(--muted);
@@ -125,7 +126,15 @@
 
 <script>
 let ws, current = null, notes = [];
+let loaded = false;  // acik notun icerigi sunucudan geldi mi (gelmeden yazilan tus eski notu tasimasin)
+let dirty = false;   // baglanti yokken yazilan degisiklik var mi
 const $ = (id) => document.getElementById(id);
+
+// ws CONNECTING/CLOSED iken send exception firlatmasin
+function send(obj) {
+  if (ws && ws.readyState === 1) { ws.send(JSON.stringify(obj)); return true; }
+  return false;
+}
 
 // --- parola: once parolasiz/hatirlanan anahtarla dene, sunucu reddederse sor ---
 let key = localStorage.getItem('key') || '';
@@ -139,7 +148,15 @@ $('loginInput').addEventListener('keydown', (e) => {
 
 function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/?key=' + encodeURIComponent(key));
-  ws.onopen = () => { $('dot').classList.add('on'); $('statusText').textContent = 'Bağlı — anlık senkron açık'; };
+  ws.onopen = () => {
+    $('statusText').textContent = 'Doğrulanıyor...';
+    if (current) {
+      // kopukluk sirasinda yazdiysak bizimki gecerli (son yazan kazanir),
+      // yazmadiysak sunucudan taze icerik iste (bayat editorle ezmeyelim)
+      if (dirty) { send({ type: 'edit', name: current, content: $('editor').value }); dirty = false; }
+      else { loaded = false; send({ type: 'open', name: current }); }
+    }
+  };
   ws.onclose = (e) => {
     $('dot').classList.remove('on');
     if (e.code === 4001) {
@@ -156,8 +173,17 @@ function connect() {
     setTimeout(connect, 1500);
   };
   ws.onmessage = (e) => {
+    // ilk mesaj = parola dogru, gercekten iceridyiz
+    $('dot').classList.add('on');
+    $('statusText').textContent = 'Bağlı — anlık senkron açık';
     const m = JSON.parse(e.data);
-    if (m.type === 'list') { notes = m.notes; renderList(); }
+    if (m.type === 'list') {
+      notes = m.notes;
+      // acik not baska cihazda silindiyse hayalet olarak kalmasin
+      if (current && !notes.includes(current)) closeNote();
+      renderList();
+    }
+    if (m.type === 'created') openNote(m.name);
     if (m.type === 'content' && m.name === current) {
       const ed = $('editor');
       if (ed.value !== m.content) {
@@ -166,6 +192,7 @@ function connect() {
         ed.value = m.content;
         ed.selectionStart = ed.selectionEnd = Math.min(pos, m.content.length);
       }
+      if (!loaded) { loaded = true; ed.disabled = false; ed.focus(); }
     }
   };
 }
@@ -181,12 +208,16 @@ function renderList() {
     span.textContent = n;
     const del = document.createElement('button');
     del.className = 'del'; del.textContent = '✕'; del.title = 'Sil';
+    // confirm() yerine iki tikli silme (Electron'da native dialog focus bozuyor)
     del.onclick = (ev) => {
       ev.stopPropagation();
-      if (confirm('"' + n + '" silinsin mi?')) {
-        ws.send(JSON.stringify({ type: 'delete', name: n }));
-        if (current === n) closeNote();
+      if (!del.classList.contains('armed')) {
+        del.classList.add('armed'); del.textContent = 'emin?';
+        setTimeout(() => { del.classList.remove('armed'); del.textContent = '✕'; }, 2500);
+        return;
       }
+      send({ type: 'delete', name: n });
+      if (current === n) closeNote();
     };
     div.append(span, del);
     div.onclick = () => openNote(n);
@@ -196,16 +227,20 @@ function renderList() {
 
 function openNote(name) {
   current = name;
+  loaded = false; dirty = false;
   $('titlebar').textContent = name;
   $('empty').style.display = 'none';
-  $('editor').style.display = '';
-  $('editor').focus();
-  ws.send(JSON.stringify({ type: 'open', name }));
+  const ed = $('editor');
+  ed.style.display = '';
+  // eski notun icerigi yeni nota sizmasin: icerik gelene kadar bos + kilitli
+  ed.value = ''; ed.disabled = true;
+  send({ type: 'open', name });
   renderList();
 }
 
 function closeNote() {
   current = null;
+  loaded = false; dirty = false;
   $('titlebar').textContent = '';
   $('editor').style.display = 'none';
   $('editor').value = '';
@@ -214,8 +249,9 @@ function closeNote() {
 }
 
 $('editor').addEventListener('input', () => {
-  if (!current || ws.readyState !== 1) return;
-  ws.send(JSON.stringify({ type: 'edit', name: current, content: $('editor').value }));
+  if (!current || !loaded) return;
+  if (!send({ type: 'edit', name: current, content: $('editor').value }))
+    dirty = true; // baglanti yok: reconnect olunca gonderilecek
 });
 
 // Electron window.prompt desteklemiyor -> inline input
@@ -228,9 +264,9 @@ $('newInput').addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
   const name = $('newInput').value.trim();
   if (!name) return;
-  ws.send(JSON.stringify({ type: 'create', name }));
+  // sunucu ismi normalize edip 'created' ile geri yollar, o acar
+  send({ type: 'create', name });
   $('newRow').style.display = 'none'; $('newInput').value = '';
-  setTimeout(() => openNote(name), 200);
 });
 </script>
 </body>

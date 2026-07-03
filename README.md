@@ -12,8 +12,8 @@
 [Releases](../../releases) sayfasından işletim sistemine uygun dosyayı indir:
 
 - **Windows:** `.exe` — çift tıkla, kurulur
-- **Linux:** `.AppImage` (çalıştırılabilir yap, çift tıkla) veya `.deb`
-- **macOS:** `.dmg`
+- **Linux:** `.deb` (önerilen) veya `.AppImage` (Ubuntu 22.04+/Debian 12+'da `sudo apt install libfuse2` gerekebilir)
+- **macOS:** `.dmg` — imzasız olduğu için ilk açılışta sağ tık → Aç gerekir
 
 İlk açılışta her şey otomatik hazırlanır: notların ve ayar dosyan ev dizininde `~/NotlarSync` klasörüne oluşturulur. Parolayı `~/NotlarSync/app-config.json` içinden değiştirmeyi unutma!
 
@@ -48,6 +48,36 @@ Client ilk açılışta ekranda parola sorar; host'taki parolayı gir.
 En kolay ve güvenli yol [Tailscale](https://tailscale.com): iki PC'ye de kur, aynı hesapla gir, client config'inde host'un Tailscale IP'sini (`100.x.x.x`) kullan. Port açmak, internete servis ifşa etmek yok; trafik uçtan uca şifreli.
 
 > ⚠️ Sunucuyu doğrudan internete (port yönlendirme vs.) açmayın: trafik TLS'siz, parola tek koruma katmanı. Tailscale/VPN kullanın.
+
+## Bilinen kısıtlar
+
+- Çakışma modeli **son yazan kazanır**: iki kişi aynı anda aynı nota yazarsa imleç zıplayabilir, tuş vuruşu kaybolabilir. Bu bir ortak-yazım (CRDT) editörü değil, kişisel senkron not defteridir.
+- İlk kurulumda parola otomatik rastgele üretilir (`~/NotlarSync/app-config.json`); client'lara bunu girmen gerekir.
+
+## Otomatik GitHub yedeği
+
+Notlar klasörünü özel (private) bir GitHub reposuna otomatik yedekletebilirsin. Bir kere kur:
+
+```bash
+cd ~/NotlarSync
+git init -b main
+git remote add origin git@github.com:KULLANICI/notlarim.git   # OZEL repo olsun!
+```
+
+sonra config'de `"gitAutoPush": true` yap. Artık her değişiklikten ~30sn sonra arkada sessizce commit + push atılır. Parolalı `app-config.json` otomatik `.gitignore`'a alınır, repoya asla girmez.
+
+## AI entegrasyonu (Claude Code, Codex, ...)
+
+Notlar düz `.md` dosyası olduğu için AI ajanları doğrudan okuyup yazabilir. Uzak cihazdaki AI'lar için REST API:
+
+```bash
+curl "http://HOST:7777/api/notes?key=PAROLA"                      # not listesi
+curl "http://HOST:7777/api/note/AI-Hafiza?key=PAROLA"             # notu oku
+curl -X POST "http://HOST:7777/api/note/AI-Hafiza?key=PAROLA" -d "içerik"        # yaz
+curl -X POST "http://HOST:7777/api/note/AI-Hafiza?key=PAROLA&append=1" -d "satır" # sona ekle
+```
+
+API'den yazılanlar, notu açık tutan tüm editörlerde **anında** belirir. Ajanlarının her oturumda "yaptığın işi `AI-Hafiza` notuna logla" talimatını alması için global talimat dosyasına (Claude Code: `~/.claude/CLAUDE.md`, Codex: `~/.codex/AGENTS.md`) kısa bir protokol bloğu ekle — örneği repo wiki'sinde.
 
 ## Tarayıcıdan kullanım
 
