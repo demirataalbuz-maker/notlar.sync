@@ -101,13 +101,28 @@ anahtarıyla dahil edebilirsin.
 
 Notlarında bağlantı kurmak için Obsidian gibi `[[Not Adı]]` yaz — o nota giden
 bir kenar oluşur. AI ajanları da not yazarken `[[link]]` kullanırsa harita
-kendiliğinden zenginleşir.
+kendiliğinden zenginleşir. İncelikler:
+
+- **Yazım toleransı**: `[[Köpek Bakımı]]`, `[[kopek-bakimi]]` ve `[[KOPEK BAKIMI]]`
+  aynı düğümde birleşir (küçük/büyük harf, Türkçe aksan, boşluk/tire farkları önemsiz).
+- **İlişki tipi** (istersen): `esinlendi:: [[Gandalf]]` yazarsan kenar "esinlendi"
+  etiketini taşır; düz `[[link]]` etiketsiz kalır.
+- **Yol bulma**: haritada **shift+tık** ile iki düğüm seç — aralarındaki en kısa
+  bağlantı zinciri beyazla vurgulanır.
+- **🤖 AI önerisi** (opsiyonel, [Ollama](https://ollama.com) varsa): local model
+  not içeriklerine bakıp "bunlar ilişkili olabilir" der. Öneriler **kesikli pembe**
+  çizilir ve **sen "✚ nota yaz" demeden hiçbir yere yazılmaz** — kabul edersen
+  notun sonuna gerçek bir `[[link]]` satırı eklenir. Ollama yoksa buton kibarca
+  "AI yok/kapalı" der, harita aynen çalışır.
 
 **AI'lar için** — grafı ham dosya okumadan JSON olarak sorgula:
 
 ```bash
-curl "http://HOST:7777/api/graph?key=PAROLA"          # tüm graf (dugum + kenar + obek)
+curl "http://HOST:7777/api/graph?key=PAROLA"          # tüm graf (düğüm + kenar + adlı öbekler)
 curl "http://HOST:7777/api/graph?key=PAROLA&gizli=1"  # AI-Hafiza notlarını da dahil et
+curl --get "http://HOST:7777/api/graph/explain" --data-urlencode "node=Not Adı" --data-urlencode "key=PAROLA"   # düğümü komşularıyla anlat
+curl --get "http://HOST:7777/api/graph/path" --data-urlencode "from=A" --data-urlencode "to=B" --data-urlencode "key=PAROLA"  # en kısa yol
+curl "http://HOST:7777/api/graph/suggest?key=PAROLA"  # Ollama bağlantı önerileri (yazmaz, sadece önerir)
 ```
 
 ## 🔐 Şifre Kasası

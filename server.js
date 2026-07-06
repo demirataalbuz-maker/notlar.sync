@@ -6,7 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { exec, execFile } = require('child_process');
 const { WebSocketServer } = require('ws');
-const { buildGraph } = require('./graph');
+const { buildGraph, explainNode, shortestPath } = require('./graph');
 
 const PORT = Number(process.env.PORT) || 7777;
 
@@ -143,9 +143,50 @@ function handleApi(req, res, url) {
     return txt(200, JSON.stringify(listNotes()), 'application/json');
 
   // --- zihin haritasi: notlar arasi [[link]] grafi (AI de insan da okuyabilir) ---
-  if (url.pathname === '/api/graph' && req.method === 'GET') {
+  if (url.pathname.startsWith('/api/graph') && req.method === 'GET') {
     const g = buildGraph(NOTES_DIR, { hideHidden: url.searchParams.get('gizli') !== '1' });
-    return txt(200, JSON.stringify(g), 'application/json');
+
+    if (url.pathname === '/api/graph')
+      return txt(200, JSON.stringify(g), 'application/json');
+
+    // dugumu komsulariyla anlat: /api/graph/explain?node=ISIM
+    if (url.pathname === '/api/graph/explain') {
+      const r = explainNode(g, url.searchParams.get('node') || '');
+      return r ? txt(200, JSON.stringify(r), 'application/json') : txt(404, 'dugum yok');
+    }
+
+    // iki not arasi en kisa yol: /api/graph/path?from=A&to=B
+    if (url.pathname === '/api/graph/path') {
+      const r = shortestPath(g, url.searchParams.get('from') || '', url.searchParams.get('to') || '');
+      return r ? txt(200, JSON.stringify({ path: r, adim: r.length - 1 }), 'application/json')
+               : txt(404, 'yol yok (dugum eksik ya da bagli degil)');
+    }
+
+    // local AI baglanti ONERISI (Ollama; yoksa 502, uygulama etkilenmez).
+    // Oneriler grafa YAZILMAZ - kesikli cizgiyle gosterilir, kullanici kabul
+    // ederse [[link]] olarak notun icine yazilir; tek gercek kaynak notlardir.
+    if (url.pathname === '/api/graph/suggest') {
+      const real = g.nodes.filter((n) => !n.ghost);
+      if (real.length < 2) return txt(200, '[]', 'application/json');
+      const mevcut = new Set(g.edges.flatMap((e) => [e.source + '|' + e.target, e.target + '|' + e.source]));
+      const liste = real.map((n) => `- ${n.label}: ${(n.description || '').slice(0, 120)}`).join('\n');
+      const prompt = 'Asagida bir kisinin notlari var. Icerik olarak birbiriyle ILGILI olabilecek en fazla 6 not cifti oner. SADECE su formatta JSON dizisi dondur, baska hicbir sey yazma: [{"a":"not adi","b":"not adi","neden":"3-6 kelimelik gerekce"}]\n\n' + liste;
+      return askOllama(url.searchParams.get('model') || 'qwen3:8b', prompt, (err, out) => {
+        if (err) return txt(502, 'AI yok/kapali: ' + err);
+        let arr;
+        try { arr = JSON.parse((out.match(/\[[\s\S]*\]/) || ['[]'])[0]); } catch { arr = []; }
+        const byNorm = new Map(real.map((n) => [n.id, n]));
+        const { normName } = require('./graph');
+        const oneri = [];
+        for (const s of Array.isArray(arr) ? arr : []) {
+          const a = byNorm.get(normName(String(s.a || ''))), b = byNorm.get(normName(String(s.b || '')));
+          if (!a || !b || a.id === b.id) continue; // uydurma isimleri ele
+          if (mevcut.has(a.id + '|' + b.id)) continue; // zaten bagli
+          oneri.push({ source: a.id, target: b.id, neden: String(s.neden || '').slice(0, 80) });
+        }
+        txt(200, JSON.stringify(oneri), 'application/json');
+      });
+    }
   }
 
   if (url.pathname === '/api/pair-code' && req.method === 'GET')

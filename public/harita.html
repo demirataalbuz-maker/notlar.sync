@@ -41,6 +41,20 @@
   }
   #aiToggle input { accent-color: var(--c-not); margin: 0; }
 
+  #sugBtn {
+    background: var(--panel); border: 1px solid var(--edge); color: var(--text-muted);
+    border-radius: 8px; padding: 8px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
+  }
+  #sugBtn:hover { color: var(--text); }
+  #sugBtn.on { color: var(--c-feedback); border-color: var(--c-feedback); }
+  .conn .rel { color: var(--text-dim); font-size: 11px; }
+  .conn.sug { color: var(--c-feedback); }
+  .conn .kabul {
+    float: right; background: none; border: 1px solid var(--edge); color: var(--text-muted);
+    border-radius: 6px; font-size: 10.5px; padding: 1px 7px; cursor: pointer;
+  }
+  .conn .kabul:hover { color: var(--c-feedback); border-color: var(--c-feedback); }
+
   #legend {
     position: absolute; bottom: 16px; left: 16px; z-index: 5;
     background: var(--panel); border: 1px solid var(--edge); border-radius: 10px;
@@ -85,6 +99,7 @@
   <div id="topbar">
     <div class="brand mono"><strong>🕸️ Zihin Haritası</strong>notlar arası bağlantılar</div>
     <div style="display:flex;gap:10px;align-items:flex-start">
+      <button id="sugBtn" title="Local AI (Ollama) içerikten bağlantı ÖNERİR — kesikli çizgi olarak gösterilir, sen kabul etmeden nota yazılmaz">🤖 öneri</button>
       <label id="aiToggle" title="AI ajanlarının tuttuğu AI-Hafiza notlarını haritaya dahil et">
         <input type="checkbox" id="showAI"> 🧠 AI notları
       </label>
@@ -92,7 +107,7 @@
     </div>
   </div>
   <div id="legend"></div>
-  <div id="hint">sürükle: taşı · tekerlek: yakınlaştır · boş alan: kaydır · <b>f</b>: ekrana sığdır<br>kesikli çizgi / ≈ : tahmini bağlantı</div>
+  <div id="hint">sürükle: taşı · tekerlek: yakınlaştır · boş alan: kaydır · <b>f</b>: ekrana sığdır<br><b>shift+tık</b> iki düğüm: aradaki yolu göster · kesikli pembe çizgi: AI önerisi (kabul etmeden yazılmaz)</div>
   <div id="panel">
     <button class="close" id="panelClose">✕</button>
     <span class="type-pill" id="pType"></span>
@@ -150,14 +165,46 @@ function loadGraph(data) {
     return o;
   });
   edges = DATA.edges
-    .map(e => ({ a: byId[e.source], b: byId[e.target], ambiguous: !!e.ambiguous }))
+    .map(e => ({ a: byId[e.source], b: byId[e.target], rel: e.relation || null }))
     .filter(e => e.a && e.b);
   nodes.forEach(n => {
     n.conns = edges.filter(e => e.a === n || e.b === n)
-      .map(e => ({ node: e.a === n ? e.b : e.a, ambiguous: e.ambiguous }));
+      .map(e => ({ node: e.a === n ? e.b : e.a, rel: e.rel }));
   });
+  // notlar degisti: eski oneriler/yol bayatlamis olabilir, dugum kalktiysa temizle
+  sugEdges = sugEdges.filter(s => byId[s.source] && byId[s.target]);
+  pathIds = pathIds.filter(id => byId[id]);
   buildLegend();
   reheat();
+}
+
+// --- AI onerileri (kesikli cizgi; kabul edilmeden notlara YAZILMAZ) ---
+let sugEdges = []; // {source, target, neden}
+function sugFor(n) {
+  return sugEdges.filter(s => s.source === n.id || s.target === n.id)
+    .map(s => ({ node: byId[s.source === n.id ? s.target : s.source], neden: s.neden, sug: s }));
+}
+
+// --- yol vurgusu: shift+tik ile secilen iki dugum arasi BFS (istemci tarafi) ---
+let pathIds = [], pathPick = null;
+function findPath(a, b) {
+  const prev = new Map([[a.id, null]]);
+  const q = [a.id];
+  while (q.length) {
+    const cur = q.shift();
+    if (cur === b.id) {
+      const out = [];
+      for (let n = b.id; n !== null; n = prev.get(n)) out.unshift(n);
+      return out;
+    }
+    for (const c of byId[cur].conns) if (!prev.has(c.node.id)) { prev.set(c.node.id, cur); q.push(c.node.id); }
+  }
+  return [];
+}
+function onPath(a, b) {
+  for (let i = 0; i < pathIds.length - 1; i++)
+    if ((pathIds[i] === a.id && pathIds[i+1] === b.id) || (pathIds[i] === b.id && pathIds[i+1] === a.id)) return true;
+  return false;
 }
 
 let camX = 0, camY = 0, zoom = 1;
@@ -252,15 +299,28 @@ function draw() {
 
   for (const e of edges) {
     const faded = dim(e.a) || dim(e.b);
-    ctx.strokeStyle = COLORS[e.a.type] || COLORS.not;
-    ctx.globalAlpha = faded ? 0.06 : (e.ambiguous ? 0.18 : 0.3);
-    ctx.lineWidth = 1 / zoom;
-    if (e.ambiguous) ctx.setLineDash([4 / zoom, 4 / zoom]);
+    const yolda = onPath(e.a, e.b);
+    ctx.strokeStyle = yolda ? '#fff' : (COLORS[e.a.type] || COLORS.not);
+    ctx.globalAlpha = yolda ? 0.9 : (faded ? 0.06 : 0.3);
+    ctx.lineWidth = (yolda ? 2.5 : 1) / zoom;
     ctx.beginPath();
     ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y);
     ctx.stroke();
-    if (e.ambiguous) ctx.setLineDash([]);
   }
+
+  // AI onerileri: kesikli pembe - gercek kenarlarla karismasin
+  ctx.setLineDash([5 / zoom, 5 / zoom]);
+  for (const s of sugEdges) {
+    const a = byId[s.source], b = byId[s.target];
+    if (!a || !b || dim(a) || dim(b)) continue;
+    ctx.strokeStyle = COLORS.feedback;
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = 1.2 / zoom;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
 
   for (const n of nodes) {
     const r = radius(n);
@@ -277,7 +337,7 @@ function draw() {
     } else {
       ctx.fillStyle = COLORS[n.type] || COLORS.not;
       ctx.fill();
-      if (n === hoverNode || n === selectedNode) {
+      if (n === hoverNode || n === selectedNode || n === pathPick || pathIds.includes(n.id)) {
         ctx.lineWidth = 2 / zoom;
         ctx.strokeStyle = '#fff';
         ctx.globalAlpha = faded ? 0.3 : 0.8;
@@ -325,6 +385,13 @@ cv.addEventListener('mousedown', (e) => {
   const px = e.clientX - rect.left, py = e.clientY - rect.top;
   const n = nodeAt(px, py);
   moved = false;
+  // shift+tik: yol secimi (1. dugum isaretlenir, 2. dugumde yol vurgulanir)
+  if (n && e.shiftKey) {
+    if (!pathPick) { pathPick = n; pathIds = []; }
+    else { pathIds = findPath(pathPick, n); pathPick = null; }
+    return;
+  }
+  if (!n) { pathIds = []; pathPick = null; } // bos alana tik: yolu temizle
   if (n) { dragNode = n; n.fixed = true; reheat(); }
   else { panning = true; autoFit = false; panStart = [px, py]; camStart = [camX, camY]; cv.classList.add('dragging'); }
 });
@@ -375,17 +442,53 @@ function selectNode(n) {
   pill.style.background = (COLORS[n.type] || COLORS.not) + '26';
   pill.style.color = COLORS[n.type] || COLORS.not;
   document.getElementById('pTitle').textContent = n.label;
+  const comm = (DATA.communities || []).find(c => c.id === n.community);
   document.getElementById('pFile').textContent =
-    (n.file ? n.file : '(henüz yazılmamış)') + '  ·  öbek #' + n.community;
+    (n.file ? n.file : '(henüz yazılmamış)') + '  ·  ' + (comm ? comm.name : 'öbek #' + n.community);
   document.getElementById('pDesc').textContent = n.description || '(açıklama yok)';
-  document.getElementById('pConnTitle').textContent = `bağlantılar (${n.conns.length})`;
+  const oneriler = sugFor(n);
+  document.getElementById('pConnTitle').textContent =
+    `bağlantılar (${n.conns.length}${oneriler.length ? ' + ' + oneriler.length + ' öneri' : ''})`;
   const box = document.getElementById('pConns');
   box.innerHTML = '';
-  n.conns.forEach(({ node: c, ambiguous }) => {
+  n.conns.forEach(({ node: c, rel }) => {
     const b = document.createElement('button');
     b.className = 'conn';
-    b.textContent = (c.ghost ? '✕ ' : ambiguous ? '≈ ' : '→ ') + c.label;
-    if (ambiguous) b.title = 'tahmini bağlantı (isim eşleşmesi, kesin değil)';
+    b.textContent = (c.ghost ? '✕ ' : '→ ') + c.label;
+    if (rel) {
+      const r = document.createElement('span');
+      r.className = 'rel'; r.textContent = '  · ' + rel;
+      b.appendChild(r);
+    }
+    b.onclick = () => { camX = W / 2 / zoom - c.x; camY = H / 2 / zoom - c.y; selectNode(c); };
+    box.appendChild(b);
+  });
+  // AI onerileri: kabul edilirse [[link]] satiri olarak NOTUN ICINE yazilir -
+  // tek gercek kaynak notlardir, harita kendi basina kenar uydurmaz/saklamaz
+  oneriler.forEach(({ node: c, neden, sug }) => {
+    const b = document.createElement('button');
+    b.className = 'conn sug';
+    b.textContent = '≈ ' + c.label;
+    b.title = 'AI önerisi: ' + neden;
+    const r = document.createElement('span');
+    r.className = 'rel'; r.textContent = '  · ' + neden;
+    b.appendChild(r);
+    if (n.file) {
+      const k = document.createElement('span');
+      k.className = 'kabul'; k.textContent = '✚ nota yaz';
+      k.onclick = async (ev) => {
+        ev.stopPropagation();
+        const stem = n.file.replace(/\.md$/, '');
+        const q = new URLSearchParams({ append: '1' });
+        if (params.get('key')) q.set('key', params.get('key'));
+        await fetch('/api/note/' + encodeURIComponent(stem) + '?' + q, {
+          method: 'POST', body: '\n- ilgili: [[' + c.label + ']]',
+        });
+        sugEdges = sugEdges.filter(s => s !== sug); // gercek kenar WS yenilemesiyle gelir
+        selectNode(n);
+      };
+      b.appendChild(k);
+    }
     b.onclick = () => { camX = W / 2 / zoom - c.x; camY = H / 2 / zoom - c.y; selectNode(c); };
     box.appendChild(b);
   });
@@ -395,6 +498,33 @@ document.getElementById('panelClose').onclick = () => { panel.classList.remove('
 // --- arama ---
 document.getElementById('search').addEventListener('input', (e) => {
   searchTerm = e.target.value.trim().toLowerCase();
+});
+
+// --- 🤖 oneri: local Ollama'dan baglanti onerisi ceker. Opsiyonel katman -
+// Ollama yoksa hata mesaji gosterir, haritanin geri kalani ayni calisir.
+const sugBtn = document.getElementById('sugBtn');
+sugBtn.addEventListener('click', async () => {
+  if (sugEdges.length) { // ikinci tik: onerileri gizle
+    sugEdges = []; sugBtn.classList.remove('on'); sugBtn.textContent = '🤖 öneri';
+    if (selectedNode) selectNode(selectedNode);
+    return;
+  }
+  sugBtn.textContent = '🤖 düşünüyor…'; sugBtn.disabled = true;
+  try {
+    const q = new URLSearchParams();
+    if (params.get('key')) q.set('key', params.get('key'));
+    if (showAI.checked) q.set('gizli', '1');
+    const r = await fetch('/api/graph/suggest' + (q.toString() ? '?' + q : ''));
+    if (!r.ok) throw new Error(await r.text());
+    sugEdges = await r.json();
+    sugBtn.textContent = sugEdges.length ? `🤖 ${sugEdges.length} öneri (gizle)` : '🤖 öneri çıkmadı';
+    sugBtn.classList.toggle('on', sugEdges.length > 0);
+    if (selectedNode) selectNode(selectedNode);
+  } catch (e) {
+    sugBtn.textContent = '🤖 ' + String(e.message || 'olmadı').slice(0, 34);
+    setTimeout(() => { sugBtn.textContent = '🤖 öneri'; }, 4000);
+  }
+  sugBtn.disabled = false;
 });
 
 // --- efsane (legend): grafta bulunan tiplere gore kurulur ---
