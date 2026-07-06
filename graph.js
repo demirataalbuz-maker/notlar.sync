@@ -45,8 +45,11 @@ function parseFrontmatter(text) {
 }
 
 // [{ t: hedef, rel: iliski|null }] - once tipli linkler bulunur, ayni hedefin
-// tipsiz tekrari elenir (tip bilgisi kaybolmasin)
+// tipsiz tekrari elenir (tip bilgisi kaybolmasin).
+// Kod bloklari (```) ve satir ici kod (`...`) taranmaz - Obsidian da saymaz;
+// boylece "[[ornek]]" diye SOZ EDEN kilavuz metinleri sahte kenar uretmez.
 function collectLinks(body) {
+  body = body.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
   const out = new Map(); // normHedef -> {t, rel}
   let m;
   TYPED_RE.lastIndex = 0;
