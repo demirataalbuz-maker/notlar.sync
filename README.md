@@ -20,7 +20,7 @@
 ## Kurulum (kaynak koddan)
 
 ```bash
-git clone <repo-url> && cd notlar-sync
+git clone https://github.com/demirataalbuz-maker/notlar-sync.git && cd notlar-sync
 npm install
 npm start
 ```
@@ -77,7 +77,16 @@ curl -X POST "http://HOST:7777/api/note/AI-Hafiza?key=PAROLA" -d "içerik"      
 curl -X POST "http://HOST:7777/api/note/AI-Hafiza?key=PAROLA&append=1" -d "satır" # sona ekle
 ```
 
-API'den yazılanlar, notu açık tutan tüm editörlerde **anında** belirir. Ajanlarının her oturumda "yaptığın işi `AI-Hafiza` notuna logla" talimatını alması için global talimat dosyasına (Claude Code: `~/.claude/CLAUDE.md`, Codex: `~/.codex/AGENTS.md`) kısa bir protokol bloğu ekle — örneği repo wiki'sinde.
+API'den yazılanlar, notu açık tutan tüm editörlerde **anında** belirir. Ajanlarının her oturumda "yaptığın işi `AI-Hafiza` notuna logla" talimatını alması için global talimat dosyasına (Claude Code: `~/.claude/CLAUDE.md`, Codex: `~/.codex/AGENTS.md`) şuna benzer kısa bir protokol bloğu ekle:
+
+```markdown
+# Ortak AI hafızası
+`~/NotlarSync/notes/AI-Hafiza.md` tüm cihazlara ve AI'lara senkron ortak hafızadır.
+- Oturum başında son ~30 satırını oku — önceki oturumlarda ne yapıldığını görürsün.
+- Önemli her işten sonra sonuna tek satır log ekle:
+  `- YYYY-MM-DD HH:MM [ajan-adi] yapılan işin bir cümlelik özeti`
+- Hassas bilgi (şifre, token) YAZMA.
+```
 
 ## 🕸️ Zihin Haritası
 
@@ -101,6 +110,23 @@ curl "http://HOST:7777/api/graph?key=PAROLA"          # tüm graf (dugum + kenar
 curl "http://HOST:7777/api/graph?key=PAROLA&gizli=1"  # AI-Hafiza notlarını da dahil et
 ```
 
+## 🔐 Şifre Kasası
+
+Kenar çubuğundaki 🔐 düğmesi: ana parolayla açılan sıfır-bilgi şifre kasası.
+Şifreleme/çözme tamamen cihazında yapılır (Web Crypto, PBKDF2 + AES-GCM) —
+sunucu yalnızca şifreli blob'u saklar, **içini asla açamaz**. Tarayıcıdan CSV
+import (Chrome/Bitwarden dışa aktarımı) ve güçlü parola üretici içerir.
+Ana parolayı unutursan kurtarma yoktur; kasa açılamaz.
+
+## 🧰 Kodlama Araçları ve 🤖 Local AI
+
+- **🧰 Araçlar**: Base64/32, Hex, Morse, ROT13/Caesar/Vigenère, JWT çözücü,
+  SHA özetleri + "sihirli çöz" (kodlamayı tahmin eder). Tamamen offline.
+- **🤖 AI**: makinede [Ollama](https://ollama.com) kuruluysa EN→TR çeviri ve
+  "AI'a sor" panelini açar. Model gömülü değildir; mevcut Ollama'n kullanılır,
+  hiçbir veri internete çıkmaz. Ollama kurulu/açık değilse panel "AI yok/kapalı"
+  hatası gösterir; uygulamanın geri kalanı etkilenmez.
+
 ## Tarayıcı eklentisi (web şifrelerini yakala)
 
 `extension/` klasöründeki eklenti, web sitelerine girdiğin şifreleri Google gibi "kaydedeyim mi?" diye sorup kasaya ekler. **Sistem-geneli dinleme (keylogger) yoktur** — sadece tarayıcı formlarına takılır ve her zaman önce sana sorar.
@@ -115,3 +141,7 @@ Bir siteye giriş yapınca "Kaydet?" banner'ı çıkar. Kabul edersen şifre, **
 ## Tarayıcıdan kullanım
 
 Electron şart değil — host çalışırken herhangi bir cihazdan `http://HOST_ADRESI:7777` açman yeterli. Sunucuyu tek başına çalıştırmak için: `npm run server`
+
+## Lisans
+
+[ISC](LICENSE)

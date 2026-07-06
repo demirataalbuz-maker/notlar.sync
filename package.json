@@ -7,7 +7,16 @@
     "server": "node server.js",
     "dist": "electron-builder"
   },
-  "keywords": [],
+  "keywords": [
+    "notes",
+    "sync",
+    "obsidian",
+    "markdown",
+    "websocket",
+    "electron",
+    "self-hosted",
+    "knowledge-graph"
+  ],
   "author": "Demir Ata Albuz <demirataalbuz@gmail.com>",
   "license": "ISC",
   "description": "Iki PC arasi anlik senkron, Obsidian temali not uygulamasi",
@@ -25,6 +34,7 @@
     "files": [
       "main.js",
       "server.js",
+      "graph.js",
       "public/**",
       "app-config.example.json"
     ],
@@ -59,6 +69,10 @@
       "perMachine": false
     }
   },
-  "homepage": "https://github.com/demirata/notlar-sync",
-  "desktopName": "notlar-sync.desktop"
+  "homepage": "https://github.com/demirataalbuz-maker/notlar-sync",
+  "desktopName": "notlar-sync.desktop",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/demirataalbuz-maker/notlar-sync.git"
+  }
 }
