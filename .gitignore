@@ -2,3 +2,4 @@ node_modules/
 notes/
 app-config.json
 dist/
+graphify-out/
