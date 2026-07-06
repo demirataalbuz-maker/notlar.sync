@@ -34,13 +34,30 @@
     display: flex; justify-content: space-between; align-items: center;
     border-bottom: 1px solid var(--border);
   }
-  #newBtn, #setBtn, #vaultBtn, #toolsBtn, #aiBtn {
+  #newBtn, #setBtn, #vaultBtn, #toolsBtn, #aiBtn, #mapBtn {
     background: none; border: none; color: var(--accent);
     font-size: 20px; cursor: pointer; line-height: 1;
   }
   #setBtn { font-size: 17px; color: var(--muted); }
-  #vaultBtn, #toolsBtn, #aiBtn { font-size: 15px; }
+  #vaultBtn, #toolsBtn, #aiBtn, #mapBtn { font-size: 15px; }
   #newBtn:hover, #setBtn:hover { color: #a396ff; }
+
+  /* zihin haritasi tam-ekran overlay */
+  #mapOverlay {
+    position: fixed; inset: 0; z-index: 50; background: var(--bg, #131019);
+    display: none; flex-direction: column;
+  }
+  #mapOverlay.open { display: flex; }
+  #mapBar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px; border-bottom: 1px solid #2a2438; flex: none;
+  }
+  #mapBar strong { font-size: 14px; }
+  #mapClose {
+    background: none; border: 1px solid #3a3350; color: #cfc8e0;
+    border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 13px;
+  }
+  #mapFrame { border: none; width: 100%; height: 100%; flex: 1; }
 
   /* araclar penceresi ortak stil (ayarlarla ayni kart) */
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 20; }
@@ -172,6 +189,7 @@
   </div>
   <div id="sidebar">
     <header>Notlar <span style="display:flex;gap:10px">
+      <button id="mapBtn" title="Zihin haritası">🕸️</button>
       <button id="vaultBtn" title="Şifre kasası">🔐</button>
       <button id="toolsBtn" title="Kodlama araçları">🧰</button>
       <button id="aiBtn" title="Çeviri / AI">🤖</button>
@@ -181,6 +199,14 @@
     <div id="newRow"><input id="newInput" placeholder="Not adı, Enter'a bas"></div>
     <div id="noteList"></div>
     <div id="status"><span id="dot"></span><span id="statusText">Bağlanıyor...</span></div>
+  </div>
+  <!-- ZIHIN HARITASI (tam ekran) -->
+  <div id="mapOverlay">
+    <div id="mapBar">
+      <strong>🕸️ Zihin Haritası</strong>
+      <button id="mapClose">✕ Kapat</button>
+    </div>
+    <iframe id="mapFrame" title="Zihin Haritası"></iframe>
   </div>
   <div id="settings">
     <div id="settingsCard">
@@ -453,6 +479,19 @@ async function copyEl(id, btn) {
   await navigator.clipboard.writeText($(id).value);
   const t = btn.textContent; btn.textContent = 'Kopyalandı ✓'; setTimeout(() => btn.textContent = t, 1200);
 }
+
+// --- ZIHIN HARITASI ---
+$('mapBtn').onclick = () => {
+  // parola iframe'e tasinir; AI-Hafiza gorunurlugu haritanin kendi 🧠 anahtarinda
+  const q = new URLSearchParams();
+  if (key) q.set('key', key);
+  $('mapFrame').src = 'harita.html' + (q.toString() ? '?' + q : '');
+  $('mapOverlay').classList.add('open');
+};
+$('mapClose').onclick = () => {
+  $('mapOverlay').classList.remove('open');
+  $('mapFrame').src = 'about:blank'; // simulasyonu durdur, bellek bosalt
+};
 
 // --- ŞİFRE KASASI ---
 let vEntries = null, vPass = null, vBlobStr = null;

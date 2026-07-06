@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Zihin Haritası — Notlar Sync</title>
+<style>
+  :root {
+    --bg: #131019; --panel: #1c1826; --edge: #332c46;
+    --text: #ece8f5; --text-muted: #9891a8; --text-dim: #6b6480;
+    --c-user: #5ec8c0; --c-feedback: #ef7fb1; --c-project: #e0b34d;
+    --c-reference: #7fd88f; --c-not: #a78bfa; --c-ghost: #6b6480;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  .mono { font-family: ui-monospace, "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace; }
+
+  #app { position: relative; width: 100vw; height: 100vh; }
+  canvas { position: absolute; inset: 0; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  #topbar { position: absolute; top: 16px; left: 16px; right: 16px; z-index: 5;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+    pointer-events: none; }
+  #topbar > * { pointer-events: auto; }
+
+  .brand { font-size: 13px; color: var(--text-muted); }
+  .brand strong { color: var(--text); font-size: 15px; display: block; margin-bottom: 2px; }
+
+  #search {
+    background: var(--panel); border: 1px solid var(--edge); color: var(--text);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; width: 220px; outline: none;
+  }
+  #search::placeholder { color: var(--text-dim); }
+  #search:focus { border-color: var(--c-not); }
+
+  #aiToggle {
+    display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
+    padding: 8px 12px; cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  #aiToggle input { accent-color: var(--c-not); margin: 0; }
+
+  #legend {
+    position: absolute; bottom: 16px; left: 16px; z-index: 5;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 10px;
+    padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px 14px; max-width: 60vw;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);
+    cursor: pointer; user-select: none;
+  }
+  .legend-item.off { opacity: 0.35; }
+  .legend-item .sw { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+  #hint { position: absolute; bottom: 16px; right: 16px; z-index: 5; font-size: 11px;
+    color: var(--text-dim); text-align: right; line-height: 1.6; }
+
+  #panel {
+    position: absolute; top: 16px; right: 16px; bottom: 16px; width: 300px; z-index: 6;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 12px;
+    padding: 18px; overflow-y: auto; transform: translateX(340px); transition: transform 0.2s ease;
+  }
+  #panel.open { transform: translateX(0); }
+  #panel .type-pill {
+    display: inline-block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 2px 8px; border-radius: 999px; margin-bottom: 10px;
+  }
+  #panel h2 { font-size: 17px; margin: 0 0 4px; text-wrap: balance; }
+  #panel .file { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; }
+  #panel .desc { font-size: 13px; color: var(--text-muted); line-height: 1.55; margin-bottom: 16px; }
+  #panel .conn-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-dim); margin-bottom: 8px; }
+  #panel .conn { display: block; width: 100%; text-align: left; background: none; border: none;
+    color: var(--text); font-size: 12.5px; padding: 6px 0; border-bottom: 1px solid var(--edge);
+    cursor: pointer; }
+  #panel .conn:hover { color: var(--c-not); }
+  #panel .close { position: absolute; top: 14px; right: 16px; background: none; border: none;
+    color: var(--text-dim); font-size: 18px; cursor: pointer; line-height: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="cv"></canvas>
+  <div id="topbar">
+    <div class="brand mono"><strong>🕸️ Zihin Haritası</strong>notlar arası bağlantılar</div>
+    <div style="display:flex;gap:10px;align-items:flex-start">
+      <label id="aiToggle" title="AI ajanlarının tuttuğu AI-Hafiza notlarını haritaya dahil et">
+        <input type="checkbox" id="showAI"> 🧠 AI notları
+      </label>
+      <input id="search" type="text" placeholder="ara…">
+    </div>
+  </div>
+  <div id="legend"></div>
+  <div id="hint">sürükle: taşı · tekerlek: yakınlaştır · boş alan: kaydır · <b>f</b>: ekrana sığdır<br>kesikli çizgi / ≈ : tahmini bağlantı</div>
+  <div id="panel">
+    <button class="close" id="panelClose">✕</button>
+    <span class="type-pill" id="pType"></span>
+    <h2 id="pTitle"></h2>
+    <div class="file mono" id="pFile"></div>
+    <div class="desc" id="pDesc"></div>
+    <div class="conn-title" id="pConnTitle"></div>
+    <div id="pConns"></div>
+  </div>
+</div>
+<script>
+// Uygulama icindeki canli harita: veri /api/graph'tan gelir, notlar
+// degisince WebSocket sinyaliyle yeniden cekilir (dugum konumlari korunur).
+let DATA = { nodes: [], edges: [] };
+const COLORS = {
+  user: '#5ec8c0', feedback: '#ef7fb1', project: '#e0b34d',
+  reference: '#7fd88f', not: '#a78bfa', ghost: '#6b6480'
+};
+const TYPE_LABELS = { user: 'kullanıcı', feedback: 'geri bildirim', project: 'proje',
+  reference: 'referans', not: 'not', ghost: 'eksik / hayalet' };
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W, H, DPR;
+function resize() {
+  DPR = window.devicePixelRatio || 1;
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+cv.style.width = '100%'; cv.style.height = '100%';
+resize();
+
+let byId = {};
+let nodes = [];
+let edges = [];
+
+// grafi (yeniden) yukle. Onceki konumlar korunur: ayni id tekrar gelirse
+// yerinde kalir, sadece yeni dugumler daireye serpilir - harita zipmaz.
+function loadGraph(data) {
+  DATA = data;
+  const prev = byId;
+  byId = {};
+  nodes = DATA.nodes.map((n, i) => {
+    const old = prev[n.id];
+    const angle = (i / (DATA.nodes.length || 1)) * Math.PI * 2;
+    const o = Object.assign({}, n, old ? { x: old.x, y: old.y, vx: 0, vy: 0, fixed: false }
+      : {
+        x: W / 2 + Math.cos(angle) * 120 + (Math.random() - 0.5) * 40,
+        y: H / 2 + Math.sin(angle) * 120 + (Math.random() - 0.5) * 40,
+        vx: 0, vy: 0, fixed: false,
+      });
+    byId[o.id] = o;
+    return o;
+  });
+  edges = DATA.edges
+    .map(e => ({ a: byId[e.source], b: byId[e.target], ambiguous: !!e.ambiguous }))
+    .filter(e => e.a && e.b);
+  nodes.forEach(n => {
+    n.conns = edges.filter(e => e.a === n || e.b === n)
+      .map(e => ({ node: e.a === n ? e.b : e.a, ambiguous: e.ambiguous }));
+  });
+  buildLegend();
+  reheat();
+}
+
+let camX = 0, camY = 0, zoom = 1;
+let hoverNode = null, selectedNode = null;
+let searchTerm = '';
+const hiddenTypes = new Set();
+
+function radius(n) { return Math.max(5, Math.min(22, 6 + n.degree * 1.7)); }
+
+// yerlesim oturunca simulasyon duraklar (tiklamak kolaylassin);
+// dugum suruklenince tekrar isinir. Kuvvetler zayiflatilmaz - sadece
+// "artik kimse kipirdamiyor" olcumu yapilir, yoksa uzak dugumler donup kalir.
+let settled = false, calmFrames = 0;
+function reheat() { settled = false; calmFrames = 0; }
+
+function step() {
+  if (settled) return;
+  const REPEL = 2600, SPRING = 0.012, IDEAL = 90, CENTER = 0.0015, DAMP = 0.86;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n.fixed) continue;
+    let fx = 0, fy = 0;
+    for (let j = 0; j < nodes.length; j++) {
+      if (i === j) continue;
+      const m = nodes[j];
+      let dx = n.x - m.x, dy = n.y - m.y;
+      let d2 = dx * dx + dy * dy || 0.01;
+      let d = Math.sqrt(d2);
+      if (d > 260) continue;
+      const f = REPEL / d2;
+      fx += (dx / d) * f; fy += (dy / d) * f;
+    }
+    fx += (W / 2 - n.x) * CENTER;
+    fy += (H / 2 - n.y) * CENTER;
+    n.vx = (n.vx + fx) * DAMP;
+    n.vy = (n.vy + fy) * DAMP;
+  }
+  for (const e of edges) {
+    if (e.a.fixed && e.b.fixed) continue;
+    const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y;
+    const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+    const f = (d - IDEAL) * SPRING;
+    const fx = (dx / d) * f, fy = (dy / d) * f;
+    if (!e.a.fixed) { e.a.vx += fx; e.a.vy += fy; }
+    if (!e.b.fixed) { e.b.vx -= fx; e.b.vy -= fy; }
+  }
+  let speed = 0;
+  const VMAX = 2.5; // hiz siniri: uzun yaylarin sonsuz salinim yapmasini engeller
+  for (const n of nodes) {
+    if (n.fixed) continue;
+    const v = Math.hypot(n.vx, n.vy);
+    if (v > VMAX) { n.vx *= VMAX / v; n.vy *= VMAX / v; }
+    n.x += n.vx; n.y += n.vy;
+    speed += Math.abs(n.vx) + Math.abs(n.vy);
+  }
+  // 30 kare boyunca ortalama hiz esigin altindaysa yerlesim oturdu say.
+  // Esik bilerek genis: milimetrik surunme bitmez, beklemek tiklamayi zorlastirir.
+  if (speed / (nodes.length || 1) < 0.2) { if (++calmFrames > 30) settled = true; }
+  else calmFrames = 0;
+}
+
+// yerlesim oturunca bir kez: tum dugumleri ekrana ortala/sigdir. Kullanici
+// pan/zoom yaparsa bir daha otomatik mudahale etme.
+let autoFit = true;
+function fitView() {
+  if (!nodes.length) return;
+  const pad = 80;
+  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const gw = Math.max(maxX - minX, 1), gh = Math.max(maxY - minY, 1);
+  zoom = Math.min((W - pad * 2) / gw, (H - pad * 2) / gh, 1.4);
+  zoom = Math.max(zoom, 0.2);
+  camX = (W / zoom - (minX + maxX)) / 2;
+  camY = (H / zoom - (minY + maxY)) / 2;
+}
+
+function worldToScreen(x, y) { return [(x + camX) * zoom, (y + camY) * zoom]; }
+function screenToWorld(x, y) { return [x / zoom - camX, y / zoom - camY]; }
+
+function dim(n) {
+  if (hiddenTypes.has(n.type)) return true;
+  if (searchTerm && !(n.label.toLowerCase().includes(searchTerm) || (n.description || '').toLowerCase().includes(searchTerm))) return true;
+  return false;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(camX * zoom, camY * zoom);
+  ctx.scale(zoom, zoom);
+
+  for (const e of edges) {
+    const faded = dim(e.a) || dim(e.b);
+    ctx.strokeStyle = COLORS[e.a.type] || COLORS.not;
+    ctx.globalAlpha = faded ? 0.06 : (e.ambiguous ? 0.18 : 0.3);
+    ctx.lineWidth = 1 / zoom;
+    if (e.ambiguous) ctx.setLineDash([4 / zoom, 4 / zoom]);
+    ctx.beginPath();
+    ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y);
+    ctx.stroke();
+    if (e.ambiguous) ctx.setLineDash([]);
+  }
+
+  for (const n of nodes) {
+    const r = radius(n);
+    const faded = dim(n);
+    ctx.globalAlpha = faded ? 0.15 : 1;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    if (n.ghost) {
+      ctx.setLineDash([3 / zoom, 3 / zoom]);
+      ctx.strokeStyle = COLORS.ghost;
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.fillStyle = COLORS[n.type] || COLORS.not;
+      ctx.fill();
+      if (n === hoverNode || n === selectedNode) {
+        ctx.lineWidth = 2 / zoom;
+        ctx.strokeStyle = '#fff';
+        ctx.globalAlpha = faded ? 0.3 : 0.8;
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = faded ? 0.2 : 0.92;
+    ctx.fillStyle = n.ghost ? COLORS.ghost : '#ece8f5';
+    ctx.font = `${11 / zoom}px -apple-system, system-ui, sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n.label, n.x + r + 5 / zoom, n.y);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+let frameNo = 0;
+function frame() {
+  step();
+  frameNo++;
+  // Ilk otomatik sigdirma GERCEK bir animasyon frame'inde yapilir: boylece
+  // canvas layout'u (clientWidth/Height) kesin hazirdir. Yerlesim oturunca,
+  // ya da en gec 90. karede bir kez sigdir; kullanici pan/zoom yapinca birak.
+  if (autoFit && (settled || frameNo >= 90)) { fitView(); autoFit = false; }
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// --- etkilesim ---
+let dragNode = null, panning = false, panStart = null, camStart = null, moved = false;
+
+function nodeAt(px, py) {
+  const [wx, wy] = screenToWorld(px, py);
+  let best = null, bestD = Infinity;
+  for (const n of nodes) {
+    const d = Math.hypot(n.x - wx, n.y - wy);
+    if (d < radius(n) + 4 && d < bestD) { best = n; bestD = d; }
+  }
+  return best;
+}
+
+cv.addEventListener('mousedown', (e) => {
+  const rect = cv.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const n = nodeAt(px, py);
+  moved = false;
+  if (n) { dragNode = n; n.fixed = true; reheat(); }
+  else { panning = true; autoFit = false; panStart = [px, py]; camStart = [camX, camY]; cv.classList.add('dragging'); }
+});
+window.addEventListener('mousemove', (e) => {
+  const rect = cv.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  if (dragNode) {
+    moved = true;
+    const [wx, wy] = screenToWorld(px, py);
+    dragNode.x = wx; dragNode.y = wy; dragNode.vx = 0; dragNode.vy = 0;
+  } else if (panning) {
+    moved = true;
+    camX = camStart[0] + (px - panStart[0]) / zoom;
+    camY = camStart[1] + (py - panStart[1]) / zoom;
+  } else {
+    hoverNode = nodeAt(px, py);
+    cv.style.cursor = hoverNode ? 'pointer' : 'grab';
+  }
+});
+window.addEventListener('mouseup', (e) => {
+  if (dragNode && !moved) selectNode(dragNode);
+  if (dragNode) dragNode.fixed = false;
+  dragNode = null; panning = false;
+  cv.classList.remove('dragging');
+});
+// 'f' tusu: her an ekrana sigdir (kullanici kaybolursa toparlanabilsin)
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'f' && document.activeElement.id !== 'search') fitView();
+});
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  autoFit = false;
+  const rect = cv.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const [wx, wy] = screenToWorld(px, py);
+  zoom *= (e.deltaY < 0 ? 1.1 : 0.9);
+  zoom = Math.max(0.2, Math.min(3, zoom));
+  camX = px / zoom - wx; camY = py / zoom - wy;
+}, { passive: false });
+
+// --- panel ---
+const panel = document.getElementById('panel');
+function selectNode(n) {
+  selectedNode = n;
+  panel.classList.add('open');
+  const pill = document.getElementById('pType');
+  pill.textContent = TYPE_LABELS[n.type] || n.type;
+  pill.style.background = (COLORS[n.type] || COLORS.not) + '26';
+  pill.style.color = COLORS[n.type] || COLORS.not;
+  document.getElementById('pTitle').textContent = n.label;
+  document.getElementById('pFile').textContent =
+    (n.file ? n.file : '(henüz yazılmamış)') + '  ·  öbek #' + n.community;
+  document.getElementById('pDesc').textContent = n.description || '(açıklama yok)';
+  document.getElementById('pConnTitle').textContent = `bağlantılar (${n.conns.length})`;
+  const box = document.getElementById('pConns');
+  box.innerHTML = '';
+  n.conns.forEach(({ node: c, ambiguous }) => {
+    const b = document.createElement('button');
+    b.className = 'conn';
+    b.textContent = (c.ghost ? '✕ ' : ambiguous ? '≈ ' : '→ ') + c.label;
+    if (ambiguous) b.title = 'tahmini bağlantı (isim eşleşmesi, kesin değil)';
+    b.onclick = () => { camX = W / 2 / zoom - c.x; camY = H / 2 / zoom - c.y; selectNode(c); };
+    box.appendChild(b);
+  });
+}
+document.getElementById('panelClose').onclick = () => { panel.classList.remove('open'); selectedNode = null; };
+
+// --- arama ---
+document.getElementById('search').addEventListener('input', (e) => {
+  searchTerm = e.target.value.trim().toLowerCase();
+});
+
+// --- efsane (legend): grafta bulunan tiplere gore kurulur ---
+const legend = document.getElementById('legend');
+function buildLegend() {
+  legend.innerHTML = '';
+  [...new Set(nodes.map(n => n.type))].forEach(t => {
+    const item = document.createElement('div');
+    item.className = 'legend-item' + (hiddenTypes.has(t) ? ' off' : '');
+    item.innerHTML = `<span class="sw" style="background:${COLORS[t] || COLORS.not}"></span>${TYPE_LABELS[t] || t}`;
+    item.onclick = () => {
+      if (hiddenTypes.has(t)) hiddenTypes.delete(t); else hiddenTypes.add(t);
+      item.classList.toggle('off');
+    };
+    legend.appendChild(item);
+  });
+}
+
+// --- veri: /api/graph'tan cek, notlar degisince yeniden cek ---
+// ?key= parolasi URL'den tasinir; AI-Hafiza notlari haritadaki 🧠 anahtariyla
+// acilir/kapanir (tercih localStorage'da kalir, ?gizli=1 ile de acilabilir)
+const params = new URLSearchParams(location.search);
+const showAI = document.getElementById('showAI');
+showAI.checked = params.get('gizli') === '1' || localStorage.getItem('haritaAI') === '1';
+showAI.addEventListener('change', () => {
+  localStorage.setItem('haritaAI', showAI.checked ? '1' : '0');
+  refresh();
+});
+function graphUrl() {
+  const q = new URLSearchParams();
+  if (params.get('key')) q.set('key', params.get('key'));
+  if (showAI.checked) q.set('gizli', '1');
+  return '/api/graph' + (q.toString() ? '?' + q : '');
+}
+let reloadTimer = null;
+async function refresh() {
+  try {
+    const g = await fetch(graphUrl()).then(r => r.json());
+    loadGraph(g);
+  } catch (e) { /* sunucu gecici kapali olabilir, sonraki sinyalde tekrar dener */ }
+}
+function scheduleRefresh() { clearTimeout(reloadTimer); reloadTimer = setTimeout(refresh, 400); }
+
+refresh();
+
+// canli senkron: not eklenince/degisince/silinince harita kendini gunceller
+try {
+  const wsKey = params.get('key') ? '?key=' + encodeURIComponent(params.get('key')) : '';
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + wsKey);
+  ws.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type === 'list' || m.type === 'content') scheduleRefresh();
+  };
+} catch (e) { /* ws yoksa harita yine de acilir, sadece canli guncellenmez */ }
+</script>
+</body>
+</html>

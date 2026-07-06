@@ -79,6 +79,28 @@ curl -X POST "http://HOST:7777/api/note/AI-Hafiza?key=PAROLA&append=1" -d "satı
 
 API'den yazılanlar, notu açık tutan tüm editörlerde **anında** belirir. Ajanlarının her oturumda "yaptığın işi `AI-Hafiza` notuna logla" talimatını alması için global talimat dosyasına (Claude Code: `~/.claude/CLAUDE.md`, Codex: `~/.codex/AGENTS.md`) kısa bir protokol bloğu ekle — örneği repo wiki'sinde.
 
+## 🕸️ Zihin Haritası
+
+Uygulamanın "zihni": notlar arası `[[link]]` bağlantılarından otomatik oluşan
+interaktif bir bilgi grafiği. Kenar çubuğundaki 🕸️ düğmesine bas — notların
+düğüm, `[[link]]`ler kenar olarak çizilir. En çok bağlantılı notlar büyür
+(god node), birbirine sıkı bağlı notlar öbeklere ayrılır (topluluk tespiti),
+henüz yazılmamış `[[link]]` hedefleri kesikli "hayalet" düğüm olur. Bir not
+eklenince/değişince harita **anında** kendini günceller. AI ajanlarının tuttuğu
+`AI-Hafiza` notları varsayılan olarak haritada gizlidir; harita üstündeki 🧠
+anahtarıyla dahil edebilirsin.
+
+Notlarında bağlantı kurmak için Obsidian gibi `[[Not Adı]]` yaz — o nota giden
+bir kenar oluşur. AI ajanları da not yazarken `[[link]]` kullanırsa harita
+kendiliğinden zenginleşir.
+
+**AI'lar için** — grafı ham dosya okumadan JSON olarak sorgula:
+
+```bash
+curl "http://HOST:7777/api/graph?key=PAROLA"          # tüm graf (dugum + kenar + obek)
+curl "http://HOST:7777/api/graph?key=PAROLA&gizli=1"  # AI-Hafiza notlarını da dahil et
+```
+
 ## Tarayıcı eklentisi (web şifrelerini yakala)
 
 `extension/` klasöründeki eklenti, web sitelerine girdiğin şifreleri Google gibi "kaydedeyim mi?" diye sorup kasaya ekler. **Sistem-geneli dinleme (keylogger) yoktur** — sadece tarayıcı formlarına takılır ve her zaman önce sana sorar.

@@ -6,6 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { exec, execFile } = require('child_process');
 const { WebSocketServer } = require('ws');
+const { buildGraph } = require('./graph');
 
 const PORT = Number(process.env.PORT) || 7777;
 
@@ -140,6 +141,12 @@ function handleApi(req, res, url) {
 
   if (url.pathname === '/api/notes' && req.method === 'GET')
     return txt(200, JSON.stringify(listNotes()), 'application/json');
+
+  // --- zihin haritasi: notlar arasi [[link]] grafi (AI de insan da okuyabilir) ---
+  if (url.pathname === '/api/graph' && req.method === 'GET') {
+    const g = buildGraph(NOTES_DIR, { hideHidden: url.searchParams.get('gizli') !== '1' });
+    return txt(200, JSON.stringify(g), 'application/json');
+  }
 
   if (url.pathname === '/api/pair-code' && req.method === 'GET')
     return makePairCode((code) => txt(200, code));
