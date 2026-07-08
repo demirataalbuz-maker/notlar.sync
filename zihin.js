@@ -197,27 +197,73 @@ function nodeMetin(n, readNote) {
   return (n.label + ': ' + (n.description || '') + ' ' + govde).slice(0, 500);
 }
 
-// dugum vektorlerini getir: SHA256 onbellekli (metin degisince anahtar da
-// degisir, eski vektor kullanilmaz), eksikler tek istekte Ollama'ya.
-// Hem semantik oneri hem GraphRAG tohum bulma ayni onbellegi paylasir.
-function vektorler(dataDir, model, adaylar, readNote, cb) {
-  const metin = (n) => nodeMetin(n, readNote);
+// --- genel embedding onbellegi: metin listesi -> vektor listesi (ayni sira).
+// SHA256 anahtarli (metin degisince anahtar da degisir, bayat vektor donmez);
+// eksikler 128'lik dilimlerle Ollama'ya gider (buyuk kasada tek istek sismesin).
+// Dugum vektorleri de chunk vektorleri de AYNI onbellegi paylasir.
+function embedCached(dataDir, model, texts, cb) {
   const anahtar = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 24);
   const cachePath = path.join(dataDir, 'embed-cache.json');
   let cache = {};
   try { cache = JSON.parse(fs.readFileSync(cachePath, 'utf8')); } catch {}
-  const eksik = adaylar.filter((n) => !cache[anahtar(metin(n))]);
+  const eksik = [...new Set(texts.filter((t) => !cache[anahtar(t)]))];
   const bitir = () => {
     try { fs.writeFileSync(cachePath, JSON.stringify(cache)); } catch {}
-    cb(new Map(adaylar.map((n) => [n.id, cache[anahtar(metin(n))]])
-      .filter(([, v]) => v)));
+    cb(texts.map((t) => cache[anahtar(t)] || null));
   };
   if (!eksik.length) return bitir();
-  ollamaJson('/api/embed', { model, input: eksik.map(metin) }, (err, d) => {
-    if (!err && Array.isArray(d.embeddings))
-      eksik.forEach((n, i) => { cache[anahtar(metin(n))] = d.embeddings[i]; });
-    bitir();
+  let i = 0;
+  (function sirada() {
+    if (i >= eksik.length) return bitir();
+    const dilim = eksik.slice(i, i + 128);
+    i += 128;
+    ollamaJson('/api/embed', { model, input: dilim }, (err, d) => {
+      if (!err && Array.isArray(d.embeddings))
+        dilim.forEach((t, j) => { cache[anahtar(t)] = d.embeddings[j]; });
+      sirada();
+    });
+  })();
+}
+
+// dugum vektorlerini getir (semantik oneri icin - dugum basi TEK vektor yeter,
+// cift karsilastirmasi chunk'larla O(n^2) patlardi)
+function vektorler(dataDir, model, adaylar, readNote, cb) {
+  const metinler = adaylar.map((n) => nodeMetin(n, readNote));
+  embedCached(dataDir, model, metinler, (vecs) => {
+    cb(new Map(adaylar.map((n, i) => [n.id, vecs[i]]).filter(([, v]) => v)));
   });
+}
+
+// --- chunk katmani: uzun notun 500. satirindaki bilgi de bulunsun ---
+// Not paragraf paragraf vektorlenir; retrieval'da notun skoru = EN IYI
+// paragrafin skoru, baglama da ilk 700 karakter degil O paragraf gider.
+// CHUNK_NOT_MAX dersi: 40'ken 80 paragraflik gunluk notunun DIBINDEKI bilgi
+// tam sinira takilip kesildi - "500. satir" senaryosunun ta kendisi. Simdi
+// paragraflar 300 karaktere birlesir (daha az, daha dolu chunk) ve tavan 80.
+const CHUNK_MIN = 300, CHUNK_MAX = 800, CHUNK_NOT_MAX = 80;
+function notParcala(govde) {
+  const paras = govde.split(/\n\s*\n/).map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const out = [];
+  let cur = '';
+  for (const p of paras) {
+    cur = cur ? cur + '\n' + p : p;
+    if (cur.length >= CHUNK_MIN) {
+      // paragraf CHUNK_MAX'i asarsa dilimle - dev paragrafin sonu kaybolmasin
+      for (let i = 0; i < cur.length && out.length < CHUNK_NOT_MAX; i += CHUNK_MAX)
+        out.push(cur.slice(i, i + CHUNK_MAX));
+      cur = '';
+    }
+    if (out.length >= CHUNK_NOT_MAX) break;
+  }
+  if (cur && out.length < CHUNK_NOT_MAX) out.push(cur);
+  return out;
+}
+
+// nota gomulu frontmatter'da `gizli: true` var mi? Bulut modeline giden
+// baglamdan bu notlar TAMAMEN cikarilir (local'de her sey ayni kalir).
+function gizliNot(icerik) {
+  const fm = (icerik || '').match(/^---([\s\S]*?)---/);
+  return !!(fm && /(^|\n)\s*gizli:\s*true\b/.test(fm[1]));
 }
 
 // grafin anlamsal ikizlerini bul, oneri OGESI listesi dondur (kuyruga
@@ -261,7 +307,11 @@ function semanticSuggest(dataDir, graph, readNote, cb) {
 const TOHUM_ESIK = 0.55; // soru<->not benzerligi; ciftlerdeki 0.85'ten dusuk
                          // cunku soru kisa, not uzun - tam ikizlik beklenmez
 
-function graphQuery(dataDir, graph, soru, readNote, askOllama, cb) {
+// secenek: { model: 'qwen3:8b', ask: askOllama-imzali fonksiyon, bulut: false }
+// bulut=true -> gizli:true notlar tohum/baglam/iliski HER katmandan cikarilir.
+function graphQuery(dataDir, graph, soru, readNote, secenek, cb) {
+  const ask = secenek.ask;
+  const cevapModeli = secenek.model || 'qwen3:8b';
   const kelime = (s) => s.toLowerCase()
     .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u')
     .replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c')
@@ -269,10 +319,14 @@ function graphQuery(dataDir, graph, soru, readNote, askOllama, cb) {
   const sorular = new Set(kelime(soru));
   if (!sorular.size) return cb('soru cok kisa');
 
-  // tohum dugumler: etiket/aciklamasinda soru kelimesi gecenler
+  const govdeOf = (n) => n.file ? (readNote(n.file.replace(/\.md$/, '')) || '') : '';
+  // bulut moduna gizli notlar hic dogmamis gibi davranir
+  const gorunur = (n) => !n.ghost && !(secenek.bulut && gizliNot(govdeOf(n)));
+
+  // tohum katman 1: etiket/aciklamasinda soru kelimesi gecenler
   const skor = new Map();
   for (const n of graph.nodes) {
-    if (n.ghost) continue;
+    if (!gorunur(n)) continue;
     const metin = kelime(n.label + ' ' + (n.description || ''));
     let s = 0;
     for (const w of metin) if (sorular.has(w)) s++;
@@ -280,28 +334,46 @@ function graphQuery(dataDir, graph, soru, readNote, askOllama, cb) {
   }
   const kelimeTohum = [...skor.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => id);
 
-  // embedding tohumlari: soru vektorune en yakin 3 not (model yoksa atla)
+  // tohum katman 2: CHUNK embedding - notun skoru en iyi PARAGRAFININ skoru,
+  // boylece uzun notun dibindeki bilgi de tohum olur. En iyi paragraflar
+  // ayni zamanda "akilli baglam" olarak saklanir (bedava, skoru zaten urettik).
+  const enIyiChunk = new Map(); // nodeId -> [{sim, text}] (soruya en yakin 2)
   findEmbedModel((model) => {
-    const adaylar = graph.nodes.filter((n) => !n.ghost
+    const adaylar = graph.nodes.filter((n) => gorunur(n)
       && nodeMetin(n, readNote).length >= n.label.length + 2 + MIN_DESC);
-    if (!model || !adaylar.length) return devam(kelimeTohum);
-    ollamaJson('/api/embed', { model, input: [soru] }, (err, d) => {
-      const soruVec = !err && Array.isArray(d.embeddings) ? d.embeddings[0] : null;
-      if (!soruVec) return devam(kelimeTohum);
-      vektorler(dataDir, model, adaylar, readNote, (vec) => {
-        const yakin = [...vec.entries()]
-          .map(([id, v]) => [kosinus(soruVec, v), id])
-          .filter(([sim]) => sim >= TOHUM_ESIK)
-          .sort((a, b) => b[0] - a[0]).slice(0, 3).map(([, id]) => id);
-        devam([...new Set([...kelimeTohum, ...yakin])]);
+    if (!model || !adaylar.length) return devam(kelimeTohum, 2, 10, true);
+    // her adayin chunk listesi: [baslik+aciklama, ...paragraflar]
+    const items = []; // {nodeId, text}
+    for (const n of adaylar) {
+      const govde = govdeOf(n).replace(/^---[\s\S]*?---\s*/, '');
+      const chunks = [n.label + ': ' + (n.description || ''), ...notParcala(govde)];
+      for (const t of chunks) if (t.trim().length >= 20) items.push({ nodeId: n.id, text: t });
+    }
+    embedCached(dataDir, model, [soru, ...items.map((x) => x.text)], (vecs) => {
+      const soruVec = vecs[0];
+      if (!soruVec) return devam(kelimeTohum, 2, 10, true);
+      const notSkor = new Map();
+      items.forEach((it, i) => {
+        const v = vecs[i + 1];
+        if (!v) return;
+        const sim = kosinus(soruVec, v);
+        const l = enIyiChunk.get(it.nodeId) || [];
+        l.push({ sim, text: it.text });
+        l.sort((a, b) => b.sim - a.sim);
+        enIyiChunk.set(it.nodeId, l.slice(0, 2));
+        if (sim > (notSkor.get(it.nodeId) || 0)) notSkor.set(it.nodeId, sim);
       });
+      const yakin = [...notSkor.entries()]
+        .filter(([, sim]) => sim >= TOHUM_ESIK)
+        .sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => id);
+      devam([...new Set([...kelimeTohum, ...yakin])], 2, 10, true);
     });
   });
 
-  function devam(tohumlar) {
+  function devam(tohumlar, derinlikMax, dugumMax, tekrarKaldi) {
   if (!tohumlar.length) return cb(null, { cevap: null, kullanilan: [], not: 'grafta eslesen dugum yok' });
 
-  // BFS: tohumlardan 2 adim, en fazla 10 dugum (tohum iki katmandan gelebilir)
+  // BFS: tohumlardan derinlikMax adim, en fazla dugumMax dugum
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const neigh = new Map(graph.nodes.map((n) => [n.id, []]));
   for (const e of graph.edges) {
@@ -310,22 +382,26 @@ function graphQuery(dataDir, graph, soru, readNote, askOllama, cb) {
   }
   const gezilen = new Set(tohumlar);
   let sinir = [...tohumlar];
-  for (let derinlik = 0; derinlik < 2 && gezilen.size < 10; derinlik++) {
+  for (let derinlik = 0; derinlik < derinlikMax && gezilen.size < dugumMax; derinlik++) {
     const yeni = [];
     for (const id of sinir)
       for (const m of neigh.get(id) || [])
-        if (!gezilen.has(m) && gezilen.size < 10 && !byId.get(m).ghost) { gezilen.add(m); yeni.push(m); }
+        if (!gezilen.has(m) && gezilen.size < dugumMax && gorunur(byId.get(m))) { gezilen.add(m); yeni.push(m); }
     sinir = yeni;
   }
 
-  // baglam: dugumlerin NOT ICERIKLERI (700'er karakter) + iliskiler
+  // akilli baglam: chunk skoru varsa soruya EN YAKIN 1-2 paragraf gider,
+  // yoksa eski davranis (ilk 700 karakter) - "ilk paragraf korlugu" biter
   const parcalar = [];
   const kullanilan = [];
   for (const id of gezilen) {
     const n = byId.get(id);
     kullanilan.push(n.label);
-    const govde = n.file ? (readNote(n.file.replace(/\.md$/, '')) || '') : '';
-    parcalar.push(`## ${n.label}\n${govde.slice(0, 700) || n.description || ''}`);
+    const iyi = enIyiChunk.get(id);
+    const icerik = iyi && iyi.length
+      ? iyi.map((c) => c.text).join('\n')
+      : (govdeOf(n).replace(/^---[\s\S]*?---\s*/, '').slice(0, 700) || n.description || '');
+    parcalar.push(`## ${n.label}\n${icerik}`);
     if (parcalar.join('').length > 6000) break;
   }
   const iliskiler = graph.edges
@@ -334,9 +410,13 @@ function graphQuery(dataDir, graph, soru, readNote, askOllama, cb) {
     .slice(0, 20).join('\n');
 
   const prompt = `Kisinin kisisel notlarindan soruyla ilgili parcalar ve aralarindaki baglar asagida. SADECE bu bilgiye dayanarak soruyu Turkce, 2-5 cumleyle cevapla; hangi notlara dayandigini belirt. Bilgi yetmiyorsa "notlarda yok" de, uydurma.\n\nSORU: ${soru}\n\nBAGLAR:\n${iliskiler}\n\nNOTLAR:\n${parcalar.join('\n\n')}`;
-  askOllama('qwen3:8b', prompt, (err, out) => {
+  ask(cevapModeli, prompt, (err, out) => {
     if (err) return cb(null, { cevap: null, kullanilan, hata: 'AI yok/kapali: ' + err });
-    cb(null, { cevap: out, kullanilan });
+    // ikinci tur: cevap "notlarda yok" ise komsu halkayi BIR kez genislet
+    // (derinlik 3, 18 dugum) - dogru not tohumun 2 adim otesindeyse kurtarir
+    if (tekrarKaldi && /notlarda yok/i.test(out) && gezilen.size < graph.nodes.length)
+      return devam(tohumlar, 3, 18, false);
+    cb(null, { cevap: out, kullanilan, tur: tekrarKaldi ? 1 : 2 });
   });
   } // devam
 }
@@ -344,4 +424,5 @@ function graphQuery(dataDir, graph, soru, readNote, askOllama, cb) {
 module.exports = {
   GUNLUK_NOTU, load, prune, addSuggestions, kabul, reddet, simdi,
   fetchPage, htmlToText, pairKey, semanticSuggest, graphQuery, findEmbedModel,
+  gizliNot, notParcala, embedCached,
 };

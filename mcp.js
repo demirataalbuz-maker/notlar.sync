@@ -49,8 +49,8 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { ad: { type: 'string' }, icerik: { type: 'string' }, ekle: { type: 'boolean' } }, required: ['ad', 'icerik'] } },
   { name: 'not_ara', description: 'Not adlarinda VE icinde metin arar, snippet dondurur.',
     inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] } },
-  { name: 'zihne_sor', description: 'GraphRAG: soruyu bilgi grafinda gezer, ilgili notlari toplar, local AI ile cevaplar. Tum notlari okumaktan cok daha token-verimli hafiza sorgusu.',
-    inputSchema: { type: 'object', properties: { soru: { type: 'string' } }, required: ['soru'] } },
+  { name: 'zihne_sor', description: 'GraphRAG: soruyu bilgi grafinda gezer, ilgili notlari toplar, AI ile cevaplar. Tum notlari okumaktan cok daha token-verimli hafiza sorgusu. model="claude" ile bulut modeli (yalniz sunucuda claudeApiKey varsa; gizli:true notlar buluta ASLA gitmez), varsayilan local.',
+    inputSchema: { type: 'object', properties: { soru: { type: 'string' }, model: { type: 'string', description: "'local' (varsayilan) ya da 'claude'" } }, required: ['soru'] } },
   { name: 'graf_ozet', description: 'Zihin haritasi grafi: dugumler, kenarlar, obekler (JSON).',
     inputSchema: { type: 'object', properties: {} } },
   { name: 'rapor', description: 'Zihin raporu: graf sagligi, obek butunlugu, sasirtici baglantilar, sorulmaya deger sorular.',
@@ -66,7 +66,8 @@ function callTool(name, a, cb) {
     case 'not_yaz': return api('/api/note/' + encodeURIComponent(a.ad),
       { method: 'POST', raw: a.icerik, query: a.ekle ? { append: '1' } : {} }, cb);
     case 'not_ara': return api('/api/search', { query: { q: a.q } }, (e, d) => cb(e, guzel(d)));
-    case 'zihne_sor': return api('/api/graph/query', { query: { q: a.soru, gizli: '1' } }, (e, d) => cb(e, guzel(d)));
+    case 'zihne_sor': return api('/api/graph/query',
+      { query: { q: a.soru, gizli: '1', ...(a.model === 'claude' ? { model: 'claude' } : {}) } }, (e, d) => cb(e, guzel(d)));
     case 'graf_ozet': return api('/api/graph', { query: { gizli: '1' } }, (e, d) => cb(e, guzel(d)));
     case 'rapor': return api('/api/graph/rapor', { query: { gizli: '1' } }, (e, d) => cb(e, guzel(d)));
     case 'baglanti_oner': return api('/api/graph/oner',

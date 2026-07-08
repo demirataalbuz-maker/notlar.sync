@@ -2,5 +2,8 @@
   "mode": "host",
   "server": "http://localhost:7777",
   "password": "degistir-beni",
-  "gitAutoPush": false
+  "gitAutoPush": false,
+  "cevapModeli": "qwen3:8b",
+  "claudeApiKey": "",
+  "claudeModel": "claude-sonnet-5"
 }

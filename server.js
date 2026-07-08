@@ -27,6 +27,8 @@ if (!fs.existsSync(CONFIG_PATH)) {
 }
 const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
 const PASSWORD = config.password ?? ''; // "" = parola kapali
+// cevap modeli config'ten (qwen3:14b'ye gecis tek satir), varsayilan 8b
+const CEVAP_MODELI = config.cevapModeli || 'qwen3:8b';
 
 // Bir istek yetkili mi? Kabul edilen anahtar = ana parola VEYA eslestirmeyle
 // uretilmis bir cihaz token'i. Parola "" ise herkese acik (yerel kullanim).
@@ -194,7 +196,7 @@ let otoTimer = null, otoCalisiyor = false;
 function otoCalistir() {
   if (otoCalisiyor) return;
   otoCalisiyor = true;
-  oneriTara(getGraph(false), 'qwen3:8b', (_, eklenen) => {
+  oneriTara(getGraph(false), CEVAP_MODELI, (_, eklenen) => {
     otoCalisiyor = false;
     try { fs.unlinkSync(OTO_BEKLEYEN); } catch {} // tarama bitti, borc kapandi
     if (eklenen.length) console.log(`oto-zihin: ${eklenen.length} yeni oneri kuyrukta`);
@@ -262,6 +264,40 @@ function askOllama(model, prompt, cb) {
   });
   r.on('error', (e) => cb(e.code === 'ECONNREFUSED' ? 'Ollama calismiyor (ollama serve)' : e.message));
   r.on('timeout', () => { r.destroy(); cb('zaman asimi'); });
+  r.end(payload);
+}
+
+// istege bagli bulut modeli: SADECE kullanici soru basina 'claude' SECERSE
+// cagirilir; anahtar girilmediyse hicbir sey buluta gitmez. Beyin sende,
+// zeka kiralik: veri local durur, o sorunun baglami gider, o kadar.
+function askClaude(model, prompt, cb) {
+  if (!config.claudeApiKey) return cb('claudeApiKey yok (app-config.json)');
+  const https = require('https');
+  const payload = JSON.stringify({
+    model: config.claudeModel || 'claude-sonnet-5',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  const r = https.request({
+    host: 'api.anthropic.com', path: '/v1/messages', method: 'POST',
+    headers: {
+      'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload),
+      'x-api-key': config.claudeApiKey, 'anthropic-version': '2023-06-01',
+    },
+    timeout: 60000,
+  }, (resp) => {
+    let d = '';
+    resp.on('data', (c) => d += c);
+    resp.on('end', () => {
+      try {
+        const j = JSON.parse(d);
+        if (j.error) return cb('Claude: ' + (j.error.message || j.error.type));
+        cb(null, (j.content || []).map((c) => c.text || '').join('').trim());
+      } catch { cb('Claude cevabi cozulemedi'); }
+    });
+  });
+  r.on('error', (e) => cb(e.message));
+  r.on('timeout', () => { r.destroy(); cb('Claude zaman asimi'); });
   r.end(payload);
 }
 
@@ -475,9 +511,14 @@ function handleApi(req, res, url) {
     if (url.pathname === '/api/graph/query') {
       const q = url.searchParams.get('q') || '';
       if (!q.trim()) return txt(400, '?q= ile soru ver');
-      return zihin.graphQuery(DATA_DIR, g, q, readNote, askOllama, (err, sonuc) => {
+      // ?model=claude -> bulut modu: gizli:true notlar baglama girmez
+      const bulut = url.searchParams.get('model') === 'claude';
+      const secenek = bulut
+        ? { ask: askClaude, model: config.claudeModel || 'claude-sonnet-5', bulut: true }
+        : { ask: askOllama, model: CEVAP_MODELI };
+      return zihin.graphQuery(DATA_DIR, g, q, readNote, secenek, (err, sonuc) => {
         if (err) return txt(400, String(err));
-        txt(200, JSON.stringify({ soru: q, ...sonuc }), 'application/json');
+        txt(200, JSON.stringify({ soru: q, model: bulut ? 'claude' : CEVAP_MODELI, ...sonuc }), 'application/json');
       });
     }
 
@@ -511,7 +552,7 @@ function handleApi(req, res, url) {
     // Oneriler grafa YAZILMAZ - kesikli cizgiyle gosterilir, kullanici kabul
     // ederse [[link]] olarak notun icine yazilir; tek gercek kaynak notlardir.
     if (url.pathname === '/api/graph/suggest') {
-      return oneriTara(g, url.searchParams.get('model') || 'qwen3:8b', (err, e1) => {
+      return oneriTara(g, url.searchParams.get('model') || CEVAP_MODELI, (err, e1) => {
         if (err && !e1.length) return txt(502, 'AI yok/kapali: ' + err);
         const st = zihin.prune(DATA_DIR, getGraph(false));
         txt(200, JSON.stringify(st.oneriler), 'application/json');
@@ -665,7 +706,7 @@ function handleApi(req, res, url) {
     const prompt = 'Yeni not: "' + name + '" — ' + desc + '\n\nMevcut notlar:\n'
       + digerleri.slice(0, 80).map((l) => '- ' + l).join('\n')
       + '\n\nYeni notla icerik olarak ILGILI en fazla 4 mevcut not sec. SADECE su formatta JSON dizisi dondur, baska hicbir sey yazma: [{"b":"not adi","neden":"3-6 kelimelik gerekce"}]';
-    askOllama('qwen3:8b', prompt, (aerr, out) => {
+    askOllama(CEVAP_MODELI, prompt, (aerr, out) => {
       if (aerr) return; // Ollama yoksa not yine de eklendi, oneri katmani atlanir
       let arr;
       try { arr = JSON.parse((out.match(/\[[\s\S]*\]/) || ['[]'])[0]); } catch { return; }
