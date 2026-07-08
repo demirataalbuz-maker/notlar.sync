@@ -35,6 +35,9 @@
       "main.js",
       "server.js",
       "graph.js",
+      "zihin.js",
+      "kopru.js",
+      "mcp.js",
       "public/**",
       "app-config.example.json"
     ],

@@ -2,7 +2,10 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e1e1e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
 <title>Notlar Sync</title>
 <style>
   /* Obsidian koyu tema renkleri */
@@ -179,6 +182,84 @@
     color: var(--text); padding: 6px 9px; border-radius: 5px;
     font-size: 14px; outline: none;
   }
+
+  /* --- icerik aramasi (ad + govde) --- */
+  #searchRow { padding: 6px; border-bottom: 1px solid var(--border); }
+  #searchRow input {
+    width: 100%; background: var(--bg1); border: 1px solid var(--border);
+    color: var(--text); padding: 6px 9px; border-radius: 5px; font-size: 13px; outline: none;
+  }
+  #searchRow input:focus { border-color: var(--accent); }
+  .snip { font-size: 11px; color: var(--muted); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px; }
+
+  /* --- baslik satiri + onizleme dugmesi --- */
+  #titlebar { display: flex; align-items: center; gap: 10px; }
+  #previewBtn {
+    margin-left: auto; background: none; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 6px; font-size: 13px; padding: 4px 10px;
+    cursor: pointer; display: none;
+  }
+  #previewBtn.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+
+  /* --- backlink cubugu ("buraya kimler link veriyor") --- */
+  #backlinks { padding: 0 34px 4px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .bl { font-size: 12px; color: var(--muted); border: 1px solid var(--border);
+    border-radius: 999px; padding: 2px 10px; cursor: pointer; }
+  .bl:hover { color: var(--accent); border-color: var(--accent); }
+  .bl.etiket { border: none; cursor: default; padding-left: 0; }
+  .bl.etiket:hover { color: var(--muted); }
+
+  /* --- markdown onizleme --- */
+  #preview { flex: 1; overflow-y: auto; padding: 10px 34px 34px;
+    font-size: 16px; line-height: 1.7; display: none; }
+  #preview h1, #preview h2, #preview h3, #preview h4 { margin: 14px 0 6px; }
+  #preview p { margin: 2px 0; }
+  #preview code { background: var(--bg2); padding: 1px 6px; border-radius: 4px;
+    font-family: monospace; font-size: 14px; }
+  #preview pre { background: var(--bg2); padding: 12px; border-radius: 8px;
+    overflow-x: auto; margin: 10px 0; }
+  #preview pre code { background: none; padding: 0; }
+  #preview img { max-width: 100%; border-radius: 8px; margin: 6px 0; }
+  #preview a { color: var(--accent); }
+  #preview ul, #preview ol { padding-left: 26px; margin: 4px 0; }
+  #preview blockquote { border-left: 3px solid var(--accent); padding-left: 12px;
+    color: var(--muted); margin: 8px 0; }
+  #preview hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+  #preview .wl { color: var(--accent); cursor: pointer; }
+  #preview .wl:hover { text-decoration: underline; }
+  #preview .wl.ghost { color: var(--muted); border-bottom: 1px dashed var(--muted); }
+  #preview .fm { color: var(--muted); font-size: 12px; background: var(--bg2);
+    border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;
+    white-space: pre-wrap; font-family: monospace; }
+
+  /* --- mobil: kenar cubugu cekmece olur, ☰ ile acilir --- */
+  #burger { display: none; background: none; border: none; color: var(--muted);
+    font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px; }
+  @media (max-width: 720px) {
+    #burger { display: block; }
+    #sidebar {
+      position: fixed; left: 0; top: 0; bottom: 0; z-index: 15;
+      width: min(82vw, 320px); min-width: 0;
+      transform: translateX(-102%); transition: transform 0.2s ease;
+      box-shadow: 4px 0 24px rgba(0,0,0,.5);
+    }
+    #sidebar.open { transform: none; }
+    #titlebar { padding: 10px 14px 4px; font-size: 18px; }
+    #editor, #preview { padding: 8px 14px 20px; font-size: 15px; }
+    #backlinks { padding: 0 14px 4px; }
+    .modalCard, #settingsCard { max-width: 96vw; max-height: 92vh; }
+  }
+
+  /* --- [[ autocomplete acilir listesi --- */
+  #autoc {
+    position: fixed; z-index: 30; background: var(--bg2);
+    border: 1px solid var(--border); border-radius: 8px; max-height: 220px;
+    overflow-y: auto; display: none; min-width: 220px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  #autoc div { padding: 7px 12px; font-size: 13.5px; cursor: pointer; }
+  #autoc div.sel, #autoc div:hover { background: var(--accent); color: #fff; }
 </style>
 </head>
 <body>
@@ -189,14 +270,16 @@
   </div>
   <div id="sidebar">
     <header>Notlar <span style="display:flex;gap:10px">
+      <button id="docBtn" title="Belge ekle — PDF/görsel/ses/video yerel AI ile nota çevrilir (zihin-haritasi motoru)" style="display:none">📎</button>
       <button id="mapBtn" title="Zihin haritası">🕸️</button>
       <button id="vaultBtn" title="Şifre kasası">🔐</button>
       <button id="toolsBtn" title="Kodlama araçları">🧰</button>
       <button id="aiBtn" title="Çeviri / AI">🤖</button>
       <button id="setBtn" title="Ayarlar">⚙</button>
-      <button id="newBtn" title="Yeni not">+</button>
+      <button id="newBtn" title="Yeni not — kutuya URL yapıştırırsan sayfayı indirip nota çevirir">+</button>
     </span></header>
-    <div id="newRow"><input id="newInput" placeholder="Not adı, Enter'a bas"></div>
+    <div id="newRow"><input id="newInput" placeholder="Not adı ya da URL, Enter'a bas"></div>
+    <div id="searchRow"><input id="searchBox" placeholder="🔍 ara — ad + içerik"></div>
     <div id="noteList"></div>
     <div id="status"><span id="dot"></span><span id="statusText">Bağlanıyor...</span></div>
   </div>
@@ -292,9 +375,12 @@
   </div></div>
 
   <div id="main">
-    <div id="titlebar"></div>
-    <textarea id="editor" placeholder="Yazmaya başla..." style="display:none" spellcheck="false"></textarea>
+    <div id="titlebar"><button id="burger" title="Not listesi">☰</button><span id="titleText"></span><button id="previewBtn" title="Önizleme — markdown görünümü, [[link]]ler tıklanır (Ctrl+E)">👁 önizle</button></div>
+    <div id="backlinks"></div>
+    <textarea id="editor" placeholder="Yazmaya başla...  ([[ yazınca not önerilir · Ctrl+tık: linke git · görsel yapıştırılabilir)" style="display:none" spellcheck="false"></textarea>
+    <div id="preview"></div>
     <div id="empty"><div style="font-size:40px">🗒️</div>Soldan bir not seç veya + ile yeni not aç</div>
+    <div id="autoc"></div>
   </div>
 
 <script src="tools.js"></script>
@@ -303,7 +389,15 @@
 let ws, current = null, notes = [];
 let loaded = false;  // acik notun icerigi sunucudan geldi mi (gelmeden yazilan tus eski notu tasimasin)
 let dirty = false;   // baglanti yokken yazilan degisiklik var mi
+let baseHash = '';   // sunucuyla en son mutabik kaldigimiz icerigin ozeti (cakisma tespiti)
 const $ = (id) => document.getElementById(id);
+
+// hizli icerik ozeti (djb2) - sunucudaki hash ile birebir ayni olmali
+function icerikHash(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
 
 // ws CONNECTING/CLOSED iken send exception firlatmasin
 function send(obj) {
@@ -326,9 +420,9 @@ function connect() {
   ws.onopen = () => {
     $('statusText').textContent = 'Doğrulanıyor...';
     if (current) {
-      // kopukluk sirasinda yazdiysak bizimki gecerli (son yazan kazanir),
-      // yazmadiysak sunucudan taze icerik iste (bayat editorle ezmeyelim)
-      if (dirty) { send({ type: 'edit', name: current, content: $('editor').value }); dirty = false; }
+      // kopuklukta yazdiysak GUVENLI gonder: sunucu da bu arada degistiyse
+      // kimse sessizce ezilmez, cakisma kopyasi acilir (CRDT'siz durust cozum)
+      if (dirty) { send({ type: 'edit-safe', name: current, content: $('editor').value, base: baseHash }); dirty = false; }
       else { loaded = false; send({ type: 'open', name: current }); }
     }
   };
@@ -357,17 +451,35 @@ function connect() {
       // acik not baska cihazda silindiyse hayalet olarak kalmasin
       if (current && !notes.includes(current)) closeNote();
       renderList();
+      if (current) blTimerKur(); // yeni/silinen not backlinkleri degistirmis olabilir
     }
+    // baska bir notta yapilan degisiklik bu nota [[link]] eklemis olabilir
+    if (m.type === 'content' && m.name !== current && current) blTimerKur();
     if (m.type === 'created') openNote(m.name);
+    // motor belge islemeyi bitirdi (basari da hata da tum cihazlara duyurulur)
+    if (m.type === 'belge')
+      $('statusText').textContent = m.hata
+        ? '📎 belge olmadı: ' + m.hata
+        : '📎 not hazır: "' + m.ad + '" (' + m.tur + ')';
+    if (m.type === 'conflict') {
+      // offline degisikligimiz kopya nota alindi, sunucudaki hali korundu
+      $('statusText').textContent = '⚠ Çakışma: senin sürümün "' + m.copy + '" notuna kaydedildi';
+    }
     if (m.type === 'content' && m.name === current) {
+      baseHash = icerikHash(m.content);
       const ed = $('editor');
       if (ed.value !== m.content) {
         // imleci koru
         const pos = ed.selectionStart;
         ed.value = m.content;
         ed.selectionStart = ed.selectionEnd = Math.min(pos, m.content.length);
+        if (previewOn) showPreview(); // onizlemedeyken baska cihazdan gelen degisiklik aninda gorunsun
       }
-      if (!loaded) { loaded = true; ed.disabled = false; ed.focus(); }
+      if (!loaded) {
+        loaded = true; ed.disabled = false;
+        if (previewOn) showPreview(); else ed.focus();
+        loadBacklinks();
+      }
     }
   };
 }
@@ -378,6 +490,8 @@ const HIDDEN_PREFIX = 'AI-Hafiza';
 const isHidden = (n) => n.startsWith(HIDDEN_PREFIX);
 
 function renderList() {
+  // arama aktifken senkron 'list' mesaji sonuclari silmesin
+  if ($('searchBox').value.trim()) return doSearch();
   const list = $('noteList');
   list.innerHTML = '';
   for (const n of notes) {
@@ -408,31 +522,45 @@ function renderList() {
 function openNote(name) {
   current = name;
   loaded = false; dirty = false;
-  $('titlebar').textContent = name;
+  $('titleText').textContent = name;
+  $('previewBtn').style.display = '';
   $('empty').style.display = 'none';
+  $('backlinks').innerHTML = '';
   const ed = $('editor');
-  ed.style.display = '';
+  ed.style.display = previewOn ? 'none' : '';
+  $('preview').style.display = previewOn ? '' : 'none';
+  if (previewOn) $('preview').innerHTML = '';
   // eski notun icerigi yeni nota sizmasin: icerik gelene kadar bos + kilitli
   ed.value = ''; ed.disabled = true;
   send({ type: 'open', name });
   renderList();
+  $('sidebar').classList.remove('open'); // mobil cekmece not acilinca kapansin
 }
 
 function closeNote() {
   current = null;
   loaded = false; dirty = false;
-  $('titlebar').textContent = '';
+  $('titleText').textContent = '';
+  $('previewBtn').style.display = 'none';
+  $('backlinks').innerHTML = '';
   $('editor').style.display = 'none';
   $('editor').value = '';
+  $('preview').style.display = 'none';
   $('empty').style.display = '';
   renderList();
 }
 
 $('editor').addEventListener('input', () => {
   if (!current || !loaded) return;
-  if (!send({ type: 'edit', name: current, content: $('editor').value }))
-    dirty = true; // baglanti yok: reconnect olunca gonderilecek
+  if (send({ type: 'edit', name: current, content: $('editor').value }))
+    baseHash = icerikHash($('editor').value); // canli senkron: mutabakat guncel
+  else
+    dirty = true; // baglanti yok: reconnect olunca edit-safe ile gonderilecek
 });
+
+// --- mobil kenar cubugu (☰) + PWA service worker ---
+$('burger').onclick = () => $('sidebar').classList.toggle('open');
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 // --- ayarlar penceresi ---
 $('setBtn').onclick = () => {
@@ -644,14 +772,327 @@ $('newBtn').onclick = () => {
   $('newRow').style.display = 'block';
   $('newInput').focus();
 };
-$('newInput').addEventListener('keydown', (e) => {
+$('newInput').addEventListener('keydown', async (e) => {
   if (e.key === 'Escape') { $('newRow').style.display = 'none'; $('newInput').value = ''; }
   if (e.key !== 'Enter') return;
   const name = $('newInput').value.trim();
   if (!name) return;
+  // URL yapistirildiysa: sayfa indirilip referans notuna cevrilir (zihni
+  // besleme); local AI arka planda mevcut notlarla baglanti ONERIR (haritada)
+  if (/^https?:\/\//i.test(name)) {
+    $('newInput').value = ''; $('newInput').placeholder = '🌐 indiriliyor…'; $('newInput').disabled = true;
+    try {
+      const r = await fetch('/api/ekle-url' + apiQ(), { method: 'POST', body: JSON.stringify({ url: name }) });
+      const t = await r.text();
+      if (!r.ok) throw new Error(t);
+      $('newRow').style.display = 'none';
+      $('newInput').placeholder = "Not adı ya da URL, Enter'a bas";
+    } catch (e2) {
+      $('newInput').placeholder = '⚠ ' + String(e2.message || 'eklenemedi').slice(0, 40);
+    }
+    $('newInput').disabled = false;
+    return;
+  }
   // sunucu ismi normalize edip 'created' ile geri yollar, o acar
   send({ type: 'create', name });
   $('newRow').style.display = 'none'; $('newInput').value = '';
+});
+
+// ============================================================
+// EDITOR KATMANI: autocomplete + tiklanabilir link + onizleme +
+// backlink + icerik aramasi + gorsel yapistirma (Obsidian paritesi)
+// ============================================================
+
+// sunucudaki normName'in aynisi: yazim farklari ayni nota cozulsun
+function normJs(s) {
+  return s.trim().toLowerCase()
+    .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u')
+    .replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[\s_-]+/g, ' ');
+}
+function resolveNote(t) {
+  const k = normJs(t);
+  return notes.find((n) => normJs(n) === k) || null;
+}
+// [[hedef]]e git: not varsa ac, yoksa OLUSTUR (Obsidian davranisi)
+function gotoNote(t) {
+  const hit = resolveNote(t);
+  if (hit) openNote(hit);
+  else send({ type: 'create', name: t }); // 'created' donunce acilir
+}
+
+const ed = $('editor');
+
+// --- [[ autocomplete: [[ yazinca not adlari onerilir ---
+const ac = $('autoc');
+let acItems = [], acSel = 0, acStart = -1;
+
+// imlecin piksel konumu: gorunmez ayna div ile olculur (textarea API'si vermez)
+function caretXY(ta) {
+  const div = document.createElement('div');
+  const st = getComputedStyle(ta);
+  for (const p of ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight',
+    'letterSpacing', 'paddingTop', 'paddingLeft', 'paddingRight', 'borderWidth', 'boxSizing'])
+    div.style[p] = st[p];
+  div.style.cssText += ';position:absolute;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;';
+  div.style.width = ta.clientWidth + 'px';
+  div.textContent = ta.value.slice(0, ta.selectionStart);
+  const span = document.createElement('span');
+  span.textContent = '​';
+  div.appendChild(span);
+  document.body.appendChild(div);
+  const r = ta.getBoundingClientRect();
+  const x = r.left + span.offsetLeft - ta.scrollLeft;
+  const y = r.top + span.offsetTop - ta.scrollTop + 26;
+  div.remove();
+  return [x, y];
+}
+function acHide() { ac.style.display = 'none'; acItems = []; }
+function acCheck() {
+  const before = ed.value.slice(0, ed.selectionStart);
+  const m = before.match(/\[\[([^\[\]\n]*)$/);
+  if (!m) return acHide();
+  acStart = ed.selectionStart - m[1].length;
+  const q = normJs(m[1]);
+  acItems = notes.filter((n) => !isHidden(n) && (!q || normJs(n).includes(q))).slice(0, 8);
+  if (!acItems.length) return acHide();
+  acSel = 0;
+  ac.innerHTML = '';
+  acItems.forEach((n, i) => {
+    const d = document.createElement('div');
+    if (i === acSel) d.className = 'sel';
+    d.textContent = n;
+    d.onmousedown = (e) => { e.preventDefault(); acPick(i); };
+    ac.appendChild(d);
+  });
+  const [x, y] = caretXY(ed);
+  ac.style.left = Math.min(x, window.innerWidth - 260) + 'px';
+  ac.style.top = Math.min(y, window.innerHeight - 240) + 'px';
+  ac.style.display = 'block';
+}
+function acPick(i) {
+  const n = acItems[i];
+  const pos = ed.selectionStart;
+  const kapali = ed.value.slice(pos).startsWith(']]');
+  ed.value = ed.value.slice(0, acStart) + n + (kapali ? '' : ']]') + ed.value.slice(pos);
+  ed.selectionStart = ed.selectionEnd = acStart + n.length + 2;
+  acHide();
+  ed.focus();
+  ed.dispatchEvent(new Event('input')); // degisiklik senkrona gitsin
+}
+ed.addEventListener('input', acCheck);
+ed.addEventListener('blur', () => setTimeout(acHide, 150));
+ed.addEventListener('keydown', (e) => {
+  // Ctrl+E: onizleme ac/kapa
+  if ((e.ctrlKey || e.metaKey) && e.key === 'e') { e.preventDefault(); $('previewBtn').click(); return; }
+  if (ac.style.display !== 'block') return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); acSel = (acSel + 1) % acItems.length; }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); acSel = (acSel - 1 + acItems.length) % acItems.length; }
+  else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); return acPick(acSel); }
+  else if (e.key === 'Escape') { return acHide(); }
+  else return;
+  [...ac.children].forEach((d, i) => d.classList.toggle('sel', i === acSel));
+});
+
+// --- Ctrl+tik: imlecin bastigi [[link]]e git ---
+ed.addEventListener('click', (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const pos = ed.selectionStart, v = ed.value;
+  const re = /\[\[([^\]|#\n]+)[^\]\n]*\]\]/g;
+  let m;
+  while ((m = re.exec(v))) {
+    if (pos >= m.index && pos <= m.index + m[0].length) { gotoNote(m[1].trim()); return; }
+  }
+});
+
+// --- markdown onizleme: bagimliliksiz mini renderer, [[link]]ler tiklanir ---
+let previewOn = false;
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function inlineMd(s) {
+  s = esc(s);
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (t, a, src) => {
+    if (!/^(https?:\/\/|files\/)/.test(src)) return t;
+    const gercek = src.startsWith('files/') ? '/' + src + apiQ() : src;
+    return '<img src="' + gercek + '" alt="' + a + '" loading="lazy">';
+  });
+  s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]/g, (t, hedef, takma) => {
+    hedef = hedef.trim();
+    const ok = resolveNote(hedef);
+    return '<span class="wl' + (ok ? '' : ' ghost') + '" data-t="'
+      + hedef.replace(/"/g, '&quot;') + '">' + (takma || hedef) + '</span>';
+  });
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+  return s;
+}
+function renderMd(text) {
+  let fm = '';
+  if (text.startsWith('---')) {
+    const e = text.indexOf('\n---', 3);
+    if (e !== -1) { fm = text.slice(3, e).trim(); text = text.slice(e + 4).replace(/^\n+/, ''); }
+  }
+  const out = [];
+  if (fm) out.push('<div class="fm">' + esc(fm) + '</div>');
+  let inCode = false, codeBuf = [], listType = null;
+  const closeList = () => { if (listType) { out.push('</' + listType + '>'); listType = null; } };
+  for (const line of text.split('\n')) {
+    if (line.trimStart().startsWith('```')) {
+      if (inCode) { out.push('<pre><code>' + esc(codeBuf.join('\n')) + '</code></pre>'); codeBuf = []; inCode = false; }
+      else { closeList(); inCode = true; }
+      continue;
+    }
+    if (inCode) { codeBuf.push(line); continue; }
+    const h = line.match(/^(#{1,6})\s+(.*)/);
+    if (h) { closeList(); out.push(`<h${h[1].length}>` + inlineMd(h[2]) + `</h${h[1].length}>`); continue; }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) { closeList(); out.push('<hr>'); continue; }
+    const ul = line.match(/^\s*[-*+]\s+(.*)/);
+    if (ul) { if (listType !== 'ul') { closeList(); out.push('<ul>'); listType = 'ul'; } out.push('<li>' + inlineMd(ul[1]) + '</li>'); continue; }
+    const ol = line.match(/^\s*\d+[.)]\s+(.*)/);
+    if (ol) { if (listType !== 'ol') { closeList(); out.push('<ol>'); listType = 'ol'; } out.push('<li>' + inlineMd(ol[1]) + '</li>'); continue; }
+    const bq = line.match(/^>\s?(.*)/);
+    if (bq) { closeList(); out.push('<blockquote>' + inlineMd(bq[1]) + '</blockquote>'); continue; }
+    closeList();
+    if (!line.trim()) { out.push('<div style="height:10px"></div>'); continue; }
+    out.push('<p>' + inlineMd(line) + '</p>');
+  }
+  if (inCode) out.push('<pre><code>' + esc(codeBuf.join('\n')) + '</code></pre>');
+  closeList();
+  return out.join('\n');
+}
+function showPreview() {
+  $('preview').innerHTML = renderMd(ed.value);
+  $('preview').querySelectorAll('.wl').forEach((el) => { el.onclick = () => gotoNote(el.dataset.t); });
+}
+$('previewBtn').onclick = () => {
+  previewOn = !previewOn;
+  $('previewBtn').classList.toggle('on', previewOn);
+  if (!current) return;
+  ed.style.display = previewOn ? 'none' : '';
+  $('preview').style.display = previewOn ? '' : 'none';
+  if (previewOn) showPreview(); else ed.focus();
+};
+
+// --- backlink paneli: bu nota [[link]] veren notlar (graftan) ---
+let blTimer;
+function blTimerKur() { clearTimeout(blTimer); blTimer = setTimeout(loadBacklinks, 600); }
+async function loadBacklinks() {
+  const box = $('backlinks');
+  box.innerHTML = '';
+  if (!current) return;
+  try {
+    const g = await fetch('/api/graph' + apiQ('gizli=1')).then((r) => r.json());
+    const me = g.nodes.find((n) => n.file === current + '.md');
+    if (!me) return;
+    const gelen = g.edges.filter((e) => e.target === me.id)
+      .map((e) => g.nodes.find((n) => n.id === e.source)).filter(Boolean);
+    if (!gelen.length) return;
+    const lbl = document.createElement('span');
+    lbl.className = 'bl etiket';
+    lbl.textContent = '← bağlayanlar:';
+    box.appendChild(lbl);
+    for (const n of gelen) {
+      const c = document.createElement('span');
+      c.className = 'bl';
+      c.textContent = n.label;
+      c.title = n.description || '';
+      c.onclick = () => { const stem = (n.file || '').replace(/\.md$/, ''); if (stem) openNote(stem); };
+      box.appendChild(c);
+    }
+  } catch (e) { /* graf gecici alinamadi, panel bos kalir */ }
+}
+
+// --- icerik aramasi: ad + govde (sunucuda /api/search) ---
+let searchTimer;
+$('searchBox').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    if (!$('searchBox').value.trim()) return renderList();
+    doSearch();
+  }, 250);
+});
+async function doSearch() {
+  const q = $('searchBox').value.trim();
+  if (!q) return;
+  let hits = [];
+  try { hits = await fetch('/api/search' + apiQ('q=' + encodeURIComponent(q))).then((r) => r.json()); } catch {}
+  const list = $('noteList');
+  list.innerHTML = '';
+  for (const h of hits) {
+    if (isHidden(h.name)) continue;
+    const div = document.createElement('div');
+    div.className = 'note-item' + (h.name === current ? ' active' : '');
+    const wrap = document.createElement('div');
+    wrap.style.minWidth = '0';
+    const ad = document.createElement('div');
+    ad.textContent = h.name;
+    wrap.appendChild(ad);
+    if (h.snippet) {
+      const sn = document.createElement('div');
+      sn.className = 'snip';
+      sn.textContent = '…' + h.snippet + '…';
+      wrap.appendChild(sn);
+    }
+    div.appendChild(wrap);
+    div.onclick = () => openNote(h.name);
+    list.appendChild(div);
+  }
+  if (!list.children.length) {
+    const d = document.createElement('div');
+    d.className = 'snip';
+    d.style.padding = '8px';
+    d.textContent = 'eşleşme yok';
+    list.appendChild(d);
+  }
+}
+
+// --- gorsel yapistirma: panodaki resim sunucuya yuklenir, ![](files/..) eklenir ---
+ed.addEventListener('paste', async (e) => {
+  const item = [...(e.clipboardData ? e.clipboardData.items : [])].find((i) => i.type.startsWith('image/'));
+  if (!item || !current || !loaded) return;
+  e.preventDefault();
+  const ext = (item.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+  try {
+    const r = await fetch('/api/upload' + apiQ('ext=' + ext), { method: 'POST', body: item.getAsFile() });
+    if (!r.ok) throw new Error(await r.text());
+    const { yol } = await r.json();
+    const pos = ed.selectionStart;
+    const parca = '![](' + yol + ')';
+    ed.value = ed.value.slice(0, pos) + parca + ed.value.slice(pos);
+    ed.selectionStart = ed.selectionEnd = pos + parca.length;
+    ed.dispatchEvent(new Event('input'));
+  } catch (err) {
+    console.log('gorsel yuklenemedi:', err.message);
+  }
+});
+
+// --- 📎 belge ekle: PDF/gorsel/ses/video -> motor (zihin-haritasi .venv)
+// metni/kavramlari cikarir, NOT olur. Motor bu makinede kurulu degilse
+// buton hic gorunmez; sonuc WS 'belge' mesajiyla gelir (whisper uzun surebilir).
+(async () => {
+  try {
+    const m = await fetch('/api/motor' + apiQ()).then((r) => r.json());
+    if (m && m.var) $('docBtn').style.display = '';
+  } catch {}
+})();
+const docFile = document.createElement('input');
+docFile.type = 'file';
+docFile.accept = '.pdf,image/*,audio/*,video/*';
+$('docBtn').addEventListener('click', () => docFile.click());
+docFile.addEventListener('change', async () => {
+  const f = docFile.files[0];
+  docFile.value = '';
+  if (!f) return;
+  $('statusText').textContent = '📎 "' + f.name + '" yükleniyor…';
+  try {
+    const r = await fetch('/api/belge' + apiQ('ad=' + encodeURIComponent(f.name)), { method: 'POST', body: f });
+    if (!r.ok) throw new Error(await r.text());
+    $('statusText').textContent = '📎 motor işliyor… (ses/video dakikalar sürebilir)';
+  } catch (err) {
+    $('statusText').textContent = '📎 olmadı: ' + String(err.message).slice(0, 60);
+  }
 });
 </script>
 </body>

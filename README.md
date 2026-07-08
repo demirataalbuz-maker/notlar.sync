@@ -125,6 +125,38 @@ curl --get "http://HOST:7777/api/graph/path" --data-urlencode "from=A" --data-ur
 curl "http://HOST:7777/api/graph/suggest?key=PAROLA"  # Ollama bağlantı önerileri (yazmaz, sadece önerir)
 ```
 
+### 📎 Belge motoru ve dışa aktarma (opsiyonel, [zihin-haritasi](https://github.com/demirataalbuz-maker) ile)
+
+Aynı makinede `~/zihin-haritasi` kuruluysa (`python3 kur.py`) uygulama onu
+**arka motor** olarak bulur ve iki özellik açılır — kurulu değilse bu düğmeler
+hiç görünmez, uygulama bağımlılıksız kalır:
+
+- **📎 Belge ekle** (kenar çubuğu): PDF / görsel / ses / video seç — motor metni
+  çıkarır (PDF: pdftotext, ses/video: whisper, görsel: llava), local AI ana
+  kavramları `[[link]]` yapar ve hepsi bir **not** olur; haritaya düşer,
+  Ollama mevcut notlarla ilişki önerir (yine onaylı kuyruğa).
+- **⬇ Dışa aktar** (haritada): SVG, GraphML (Gephi/yEd), Neo4j Cypher,
+  Obsidian kasası veya wiki sayfaları olarak.
+
+Motor farklı bir yoldaysa `NOTLAR_MOTOR=/yol/zihin-haritasi` ortam değişkeniyle gösterilir.
+
+**İkisini tek seferde kurmak** (uygulama + motor birlikte):
+
+```bash
+git clone https://github.com/demirataalbuz-maker/notlar-sync && cd notlar-sync && npm install && cd ..
+git clone https://github.com/demirataalbuz-maker/zihin-haritasi ~/zihin-haritasi && python3 ~/zihin-haritasi/kur.py
+```
+
+Sıra önemli değil: motoru sonradan kurarsan uygulama penceresini
+yenilemen (kapat/aç) yeter, 📎 kendiliğinden belirir. Motor hiç
+kurulmazsa uygulama aynen çalışır — sadece 📎 ve ⬇ düğmeleri görünmez.
+
+```bash
+curl "http://HOST:7777/api/motor?key=PAROLA"                                   # motor var mı, neleri işleyebilir?
+curl -X POST --data-binary @rapor.pdf "http://HOST:7777/api/belge?ad=rapor.pdf&key=PAROLA"   # belge -> not
+curl "http://HOST:7777/api/graph/export?format=svg&key=PAROLA" -o harita.svg   # svg | graphml | neo4j | obsidian | wiki
+```
+
 ## 🔐 Şifre Kasası
 
 Kenar çubuğundaki 🔐 düğmesi: ana parolayla açılan sıfır-bilgi şifre kasası.

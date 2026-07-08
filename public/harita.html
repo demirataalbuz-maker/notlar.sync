@@ -41,12 +41,38 @@
   }
   #aiToggle input { accent-color: var(--c-not); margin: 0; }
 
-  #sugBtn {
+  #sugBtn, #rprBtn {
     background: var(--panel); border: 1px solid var(--edge); color: var(--text-muted);
     border-radius: 8px; padding: 8px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
   }
-  #sugBtn:hover { color: var(--text); }
+  #sugBtn:hover, #rprBtn:hover { color: var(--text); }
   #sugBtn.on { color: var(--c-feedback); border-color: var(--c-feedback); }
+
+  /* 📊 zihin raporu paneli (sol tarafta acilir) */
+  #rapor {
+    position: absolute; top: 64px; left: 16px; bottom: 64px; width: 360px; z-index: 6;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 12px;
+    padding: 18px; overflow-y: auto; transform: translateX(-400px); transition: transform 0.2s ease;
+  }
+  #rapor.open { transform: translateX(0); }
+  #rapor h2 { font-size: 15px; margin: 0 0 10px; }
+  #rapor .close { position: absolute; top: 14px; right: 16px; background: none; border: none;
+    color: var(--text-dim); font-size: 18px; cursor: pointer; line-height: 1; }
+  .rTitle { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-dim); margin: 14px 0 6px; }
+  .rLine { font-size: 12.5px; color: var(--text-muted); padding: 4px 0;
+    border-bottom: 1px solid var(--edge); line-height: 1.5; }
+  .rLine.clickable { cursor: pointer; color: var(--text); }
+  .rLine.clickable:hover { color: var(--c-feedback); }
+  .rLine.dim { color: var(--text-dim); border: none; margin-top: 10px; font-size: 11.5px; }
+  #sorKutu input {
+    width: 100%; background: var(--bg); border: 1px solid var(--edge); color: var(--text);
+    border-radius: 8px; padding: 8px 10px; font-size: 12.5px; outline: none;
+  }
+  #sorKutu input:focus { border-color: var(--c-not); }
+  #sorCevap { font-size: 12.5px; color: var(--text-muted); line-height: 1.6;
+    margin-top: 8px; white-space: pre-wrap; }
+  #sorCevap .kaynaklar { color: var(--text-dim); font-size: 11px; margin-top: 6px; }
   .conn .rel { color: var(--text-dim); font-size: 11px; }
   .conn.sug { color: var(--c-feedback); }
   .conn .kabul {
@@ -99,7 +125,12 @@
   <div id="topbar">
     <div class="brand mono"><strong>🕸️ Zihin Haritası</strong>notlar arası bağlantılar</div>
     <div style="display:flex;gap:10px;align-items:flex-start">
-      <button id="sugBtn" title="Local AI (Ollama) içerikten bağlantı ÖNERİR — kesikli çizgi olarak gösterilir, sen kabul etmeden nota yazılmaz">🤖 öneri</button>
+      <button id="rprBtn" title="Zihin raporu: sağlık, öbek bütünlüğü, şaşırtıcı bağlantılar, sorulmaya değer sorular">📊 rapor</button>
+      <button id="sugBtn" title="Local AI (Ollama) içerikten bağlantı ÖNERİR — öneriler kuyrukta bekler, sen kabul etmeden nota yazılmaz; reddedilen bir daha önerilmez">🤖 öneri</button>
+      <div id="expWrap" style="position:relative;display:none">
+        <button id="expBtn" title="Haritayı dışa aktar (zihin-haritasi motoru): SVG, GraphML, Neo4j, Obsidian kasası, wiki">⬇ dışa aktar</button>
+        <div id="expMenu" style="display:none;position:absolute;right:0;top:110%;background:#1e1e2e;border:1px solid #45475a;border-radius:8px;padding:4px;z-index:9;min-width:130px"></div>
+      </div>
       <label id="aiToggle" title="AI ajanlarının tuttuğu AI-Hafiza notlarını haritaya dahil et">
         <input type="checkbox" id="showAI"> 🧠 AI notları
       </label>
@@ -107,7 +138,16 @@
     </div>
   </div>
   <div id="legend"></div>
-  <div id="hint">sürükle: taşı · tekerlek: yakınlaştır · boş alan: kaydır · <b>f</b>: ekrana sığdır<br><b>shift+tık</b> iki düğüm: aradaki yolu göster · kesikli pembe çizgi: AI önerisi (kabul etmeden yazılmaz)</div>
+  <div id="hint">sürükle: taşı · tekerlek: yakınlaştır · boş alan: kaydır · <b>f</b>: ekrana sığdır<br><b>shift+tık</b> iki düğüm: aradaki yolu göster · kesikli pembe çizgi: AI önerisi (✚ kabul → nota yazılır, ✗ ret → bir daha önerilmez)</div>
+  <div id="rapor">
+    <button class="close" id="raporClose">✕</button>
+    <h2>📊 Zihin Raporu</h2>
+    <div id="sorKutu">
+      <input id="sorInput" placeholder="💬 zihne sor — örn: prompt injection hakkında ne biriktirdim?">
+      <div id="sorCevap"></div>
+    </div>
+    <div id="raporBody">yükleniyor…</div>
+  </div>
   <div id="panel">
     <button class="close" id="panelClose">✕</button>
     <span class="type-pill" id="pType"></span>
@@ -174,15 +214,34 @@ function loadGraph(data) {
   // notlar degisti: eski oneriler/yol bayatlamis olabilir, dugum kalktiysa temizle
   sugEdges = sugEdges.filter(s => byId[s.source] && byId[s.target]);
   pathIds = pathIds.filter(id => byId[id]);
+  sugBadge();
   buildLegend();
   reheat();
 }
 
-// --- AI onerileri (kesikli cizgi; kabul edilmeden notlara YAZILMAZ) ---
-let sugEdges = []; // {source, target, neden}
+// --- AI onerileri: SUNUCUDAKI kalici kuyruk (zihin.json). Kabul edilmeden
+// notlara YAZILMAZ; kabul/ret sunucuya POST'lanir, gunluge islenir, tum
+// cihazlarda ayni anda gorunur. Ollama'nin da dis AI ajanlarin da onerileri
+// ayni kuyruga duser (kaynak: 'ollama' | 'ajan').
+let sugEdges = []; // {id, source, target, sourceLabel, targetLabel, neden, kaynak}
 function sugFor(n) {
   return sugEdges.filter(s => s.source === n.id || s.target === n.id)
     .map(s => ({ node: byId[s.source === n.id ? s.target : s.source], neden: s.neden, sug: s }));
+}
+async function zihinPost(path, body) {
+  const q = params.get('key') ? '?key=' + encodeURIComponent(params.get('key')) : '';
+  const r = await fetch(path + q, { method: 'POST', body: JSON.stringify(body || {}) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.text();
+}
+async function refreshOneriler() {
+  try {
+    const q = params.get('key') ? '?key=' + encodeURIComponent(params.get('key')) : '';
+    const st = await fetch('/api/graph/oneriler' + q).then(r => r.json());
+    sugEdges = (st.oneriler || []).filter(s => byId[s.source] && byId[s.target]);
+  } catch (e) { /* sunucu gecici kapali olabilir */ }
+  sugBadge();
+  if (selectedNode) selectNode(selectedNode);
 }
 
 // --- yol vurgusu: shift+tik ile secilen iki dugum arasi BFS (istemci tarafi) ---
@@ -463,32 +522,35 @@ function selectNode(n) {
     b.onclick = () => { camX = W / 2 / zoom - c.x; camY = H / 2 / zoom - c.y; selectNode(c); };
     box.appendChild(b);
   });
-  // AI onerileri: kabul edilirse [[link]] satiri olarak NOTUN ICINE yazilir -
-  // tek gercek kaynak notlardir, harita kendi basina kenar uydurmaz/saklamaz
+  // AI onerileri: ✚ kabul -> sunucu [[link]]'i KAYNAK notun icine yazar +
+  // gunluge isler; ✗ ret -> cift kalici ret listesine girer, bir daha onerilmez.
+  // Harita kendi basina kenar uydurmaz/saklamaz - tek gercek kaynak notlardir.
   oneriler.forEach(({ node: c, neden, sug }) => {
     const b = document.createElement('button');
     b.className = 'conn sug';
     b.textContent = '≈ ' + c.label;
-    b.title = 'AI önerisi: ' + neden;
+    b.title = 'AI önerisi (' + (sug.kaynak || 'ollama') + '): ' + neden;
     const r = document.createElement('span');
     r.className = 'rel'; r.textContent = '  · ' + neden;
     b.appendChild(r);
-    if (n.file) {
-      const k = document.createElement('span');
-      k.className = 'kabul'; k.textContent = '✚ nota yaz';
-      k.onclick = async (ev) => {
-        ev.stopPropagation();
-        const stem = n.file.replace(/\.md$/, '');
-        const q = new URLSearchParams({ append: '1' });
-        if (params.get('key')) q.set('key', params.get('key'));
-        await fetch('/api/note/' + encodeURIComponent(stem) + '?' + q, {
-          method: 'POST', body: '\n- ilgili: [[' + c.label + ']]',
-        });
-        sugEdges = sugEdges.filter(s => s !== sug); // gercek kenar WS yenilemesiyle gelir
-        selectNode(n);
-      };
-      b.appendChild(k);
-    }
+    const ret = document.createElement('span');
+    ret.className = 'kabul'; ret.textContent = '✗';
+    ret.title = 'reddet — bir daha önerilmez';
+    ret.onclick = async (ev) => {
+      ev.stopPropagation();
+      try { await zihinPost('/api/graph/oneri/reddet', { id: sug.id }); } catch (e) {}
+      refreshOneriler(); // sunucu 'oneri' sinyali de yollar; bu aninda tepki icin
+    };
+    const k = document.createElement('span');
+    k.className = 'kabul'; k.textContent = '✚ kabul';
+    k.title = 'kabul et — [[link]] nota yazılır';
+    k.onclick = async (ev) => {
+      ev.stopPropagation();
+      try { await zihinPost('/api/graph/oneri/kabul', { id: sug.id }); } catch (e) {}
+      refreshOneriler(); // gercek kenar WS yenilemesiyle gelir
+    };
+    b.appendChild(ret);
+    b.appendChild(k);
     b.onclick = () => { camX = W / 2 / zoom - c.x; camY = H / 2 / zoom - c.y; selectNode(c); };
     box.appendChild(b);
   });
@@ -500,15 +562,16 @@ document.getElementById('search').addEventListener('input', (e) => {
   searchTerm = e.target.value.trim().toLowerCase();
 });
 
-// --- 🤖 oneri: local Ollama'dan baglanti onerisi ceker. Opsiyonel katman -
+// --- 🤖 oneri: local Ollama'dan YENI baglanti onerisi ister; sonuc sunucudaki
+// kalici kuyruga girer (reddedilmisler otomatik elenir). Opsiyonel katman -
 // Ollama yoksa hata mesaji gosterir, haritanin geri kalani ayni calisir.
 const sugBtn = document.getElementById('sugBtn');
+function sugBadge() {
+  sugBtn.textContent = sugEdges.length ? `🤖 ${sugEdges.length} öneri bekliyor` : '🤖 öneri iste';
+  sugBtn.classList.toggle('on', sugEdges.length > 0);
+  sugBtn.disabled = false;
+}
 sugBtn.addEventListener('click', async () => {
-  if (sugEdges.length) { // ikinci tik: onerileri gizle
-    sugEdges = []; sugBtn.classList.remove('on'); sugBtn.textContent = '🤖 öneri';
-    if (selectedNode) selectNode(selectedNode);
-    return;
-  }
   sugBtn.textContent = '🤖 düşünüyor…'; sugBtn.disabled = true;
   try {
     const q = new URLSearchParams();
@@ -516,16 +579,129 @@ sugBtn.addEventListener('click', async () => {
     if (showAI.checked) q.set('gizli', '1');
     const r = await fetch('/api/graph/suggest' + (q.toString() ? '?' + q : ''));
     if (!r.ok) throw new Error(await r.text());
-    sugEdges = await r.json();
-    sugBtn.textContent = sugEdges.length ? `🤖 ${sugEdges.length} öneri (gizle)` : '🤖 öneri çıkmadı';
-    sugBtn.classList.toggle('on', sugEdges.length > 0);
+    sugEdges = (await r.json()).filter(s => byId[s.source] && byId[s.target]);
+    sugBadge();
     if (selectedNode) selectNode(selectedNode);
   } catch (e) {
     sugBtn.textContent = '🤖 ' + String(e.message || 'olmadı').slice(0, 34);
-    setTimeout(() => { sugBtn.textContent = '🤖 öneri'; }, 4000);
+    setTimeout(sugBadge, 4000);
   }
   sugBtn.disabled = false;
 });
+
+// --- ⬇ disa aktar: motor (zihin-haritasi .venv) uzerinden. Motor bu makinede
+// yoksa buton hic gorunmez. svg/graphml/neo4j indirilir; obsidian/wiki klasore
+// yazilir ve yol gosterilir.
+(async () => {
+  try {
+    const q = params.get('key') ? '?key=' + encodeURIComponent(params.get('key')) : '';
+    const m = await fetch('/api/motor' + q).then((r) => r.json());
+    if (m && m.var) document.getElementById('expWrap').style.display = '';
+  } catch {}
+})();
+const expMenu = document.getElementById('expMenu');
+[['svg', 'SVG görsel'], ['graphml', 'GraphML (Gephi/yEd)'], ['neo4j', 'Neo4j Cypher'], ['obsidian', 'Obsidian kasası'], ['wiki', 'Wiki sayfaları']].forEach(([f, ad]) => {
+  const b = document.createElement('button');
+  b.textContent = ad;
+  b.style.cssText = 'display:block;width:100%;text-align:left;margin:2px 0';
+  b.onclick = async () => {
+    expMenu.style.display = 'none';
+    const q = new URLSearchParams({ format: f });
+    if (params.get('key')) q.set('key', params.get('key'));
+    if (showAI.checked) q.set('gizli', '1');
+    if (f === 'obsidian' || f === 'wiki') {
+      b.disabled = true;
+      try {
+        const r = await fetch('/api/graph/export?' + q);
+        if (!r.ok) throw new Error(await r.text());
+        alert('Yazıldı: ' + (await r.json()).klasor);
+      } catch (e) { alert('olmadı: ' + String(e.message).slice(0, 120)); }
+      b.disabled = false;
+    } else {
+      location.href = '/api/graph/export?' + q; // indirme olarak gelir
+    }
+  };
+  expMenu.appendChild(b);
+});
+document.getElementById('expBtn').onclick = () => {
+  expMenu.style.display = expMenu.style.display === 'none' ? '' : 'none';
+};
+
+// --- 📊 zihin raporu: saglik + obek butunlugu + sasirtici baglantilar + sorular ---
+const raporEl = document.getElementById('rapor');
+document.getElementById('raporClose').onclick = () => raporEl.classList.remove('open');
+document.getElementById('rprBtn').onclick = async () => {
+  if (raporEl.classList.contains('open')) { raporEl.classList.remove('open'); return; }
+  raporEl.classList.add('open');
+  const body = document.getElementById('raporBody');
+  body.textContent = 'yükleniyor…';
+  try {
+    const q = new URLSearchParams();
+    if (params.get('key')) q.set('key', params.get('key'));
+    if (showAI.checked) q.set('gizli', '1');
+    const r = await fetch('/api/graph/rapor' + (q.toString() ? '?' + q : '')).then(x => x.json());
+    renderRapor(r, body);
+  } catch (e) { body.textContent = 'rapor alınamadı: ' + (e.message || e); }
+};
+// 💬 zihne sor: GraphRAG - soru grafta gezilir, ilgili notlar toplanir,
+// local AI SADECE o baglamla cevaplar (uydurmasin diye)
+document.getElementById('sorInput').addEventListener('keydown', async (e) => {
+  if (e.key !== 'Enter') return;
+  const q = e.target.value.trim();
+  if (!q) return;
+  const out = document.getElementById('sorCevap');
+  out.textContent = '🤔 grafta geziliyor, notlar okunuyor…';
+  try {
+    const qs = new URLSearchParams({ q });
+    if (params.get('key')) qs.set('key', params.get('key'));
+    if (showAI.checked) qs.set('gizli', '1');
+    const r = await fetch('/api/graph/query?' + qs).then((x) => x.json());
+    out.textContent = r.cevap || r.hata || r.not || 'cevap yok';
+    if (r.kullanilan && r.kullanilan.length) {
+      const k = document.createElement('div');
+      k.className = 'kaynaklar';
+      k.textContent = '📎 dayandığı notlar: ' + r.kullanilan.join(' · ');
+      out.appendChild(k);
+    }
+  } catch (err) { out.textContent = 'olmadı: ' + (err.message || err); }
+});
+
+function renderRapor(r, body) {
+  body.innerHTML = '';
+  const h = (t) => { const d = document.createElement('div'); d.className = 'rTitle'; d.textContent = t; body.appendChild(d); };
+  const li = (t, cls) => { const d = document.createElement('div'); d.className = 'rLine' + (cls ? ' ' + cls : ''); d.textContent = t; body.appendChild(d); return d; };
+  h('Sağlık');
+  if (r.saglik.durum === 'temiz') li('✅ temiz — kopuk uç / öz-döngü / çift kenar / kırık link yok');
+  else {
+    if (r.saglik.ozdongu) li('⚠️ ' + r.saglik.ozdongu + ' öz-döngü atıldı (not kendine [[link]] veriyor)');
+    if (r.saglik.cift) li('⚠️ ' + r.saglik.cift + ' çift kenar birleştirildi');
+    if (r.saglik.kirikLink) li('⚠️ ' + r.saglik.kirikLink + ' kırık [[link]] — hedef notlar henüz yok');
+  }
+  if (r.topluluklar && r.topluluklar.length) {
+    h('Öbek bütünlüğü (1.0 = tamamen içine dönük)');
+    r.topluluklar.forEach(c => li(`${c.name} — ${c.size} üye · bütünlük ${c.butunluk}`));
+  }
+  if (r.sasirtici && r.sasirtici.length) {
+    h('Şaşırtıcı bağlantılar (iki öbek arası TEK köprü)');
+    r.sasirtici.forEach(s => {
+      const d = li(`${s.a} ↔ ${s.b}${s.relation ? ' · ' + s.relation : ''}  (${s.obekA} ⇄ ${s.obekB})`, 'clickable');
+      d.title = 'tıkla: haritada bu köprüyü vurgula';
+      d.onclick = () => {
+        const a = nodes.find(n => n.label === s.a), b = nodes.find(n => n.label === s.b);
+        if (a && b) { pathIds = findPath(a, b); pathPick = null; }
+      };
+    });
+  }
+  if (r.sorular && r.sorular.length) {
+    h('Sorulmaya değer');
+    r.sorular.forEach(s => li('❓ ' + s));
+  }
+  if (r.yetimler && r.yetimler.length) {
+    h('Yetimler (hiç bağlantısız)');
+    li(r.yetimler.join(' · '));
+  }
+  li(`${r.dugum} düğüm · ${r.kenar} kenar · bekleyen öneri: ${r.bekleyenOneri}`, 'dim');
+}
 
 // --- efsane (legend): grafta bulunan tiplere gore kurulur ---
 const legend = document.getElementById('legend');
@@ -568,15 +744,17 @@ async function refresh() {
 }
 function scheduleRefresh() { clearTimeout(reloadTimer); reloadTimer = setTimeout(refresh, 400); }
 
-refresh();
+refresh().then(refreshOneriler);
 
-// canli senkron: not eklenince/degisince/silinince harita kendini gunceller
+// canli senkron: not eklenince/degisince/silinince harita kendini gunceller;
+// oneri kuyrugu degisince (baska cihaz/ajan) oneriler de tazelenir
 try {
   const wsKey = params.get('key') ? '?key=' + encodeURIComponent(params.get('key')) : '';
   const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + wsKey);
   ws.onmessage = (ev) => {
     let m; try { m = JSON.parse(ev.data); } catch { return; }
     if (m.type === 'list' || m.type === 'content') scheduleRefresh();
+    if (m.type === 'oneri') refreshOneriler();
   };
 } catch (e) { /* ws yoksa harita yine de acilir, sadece canli guncellenmez */ }
 </script>

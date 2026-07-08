@@ -6,9 +6,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const LINK_RE = /\[\[([^\]|#]+)/g;
+// Obsidian gibi: kapanmamis "[[ ..." ya da satir atlayan aday SAYILMAZ
+// (duz metinde "[[ autocomplete" diye soz etmek sahte dugum uretmesin)
+const LINK_RE = /\[\[([^\]|#\n]+)[^\]\n]*\]\]/g;
 // tipli baglanti (Dataview uslubu): `iliski:: [[hedef]]` -> kenara iliski adi yazilir
-const TYPED_RE = /([\p{L}][\p{L}\d _-]{0,30})::\s*\[\[([^\]|#]+)/gu;
+const TYPED_RE = /([\p{L}][\p{L}\d _-]{0,30})::[ \t]*\[\[([^\]|#\n]+)[^\]\n]*\]\]/gu;
 
 // isim normalizasyonu: "Köpek Bakımı" == "kopek-bakimi" == "KOPEK BAKIMI".
 // Kucuk harf + turkce aksan katlama + bosluk/tire/altcizgi esitleme; boylece
@@ -134,14 +136,20 @@ function buildGraph(notesDir, { hideHidden = false } = {}) {
     });
   }
 
-  // oz-dongu ve tekrari at (tipli kenar tipsiz kopyasini ezer)
+  // oz-dongu ve tekrari at (tipli kenar tipsiz kopyasini ezer) - atilanlar
+  // SAYILIR ve rapora yazilir: sessizce hicbir sey yutulmaz (saglik kontrolu)
   const seen = new Map();
+  let ozdongu = 0, cift = 0;
   for (const [a, l] of visEdges) {
     const b = normName(l.t);
-    if (a === b) continue;
+    if (a === b) { ozdongu++; continue; }
     const k = a + '\0' + b;
-    if (!seen.has(k) || (l.rel && !seen.get(k).relation))
-      seen.set(k, { source: a, target: b, relation: l.rel || null });
+    if (seen.has(k)) {
+      cift++;
+      if (l.rel && !seen.get(k).relation) seen.set(k, { source: a, target: b, relation: l.rel });
+      continue;
+    }
+    seen.set(k, { source: a, target: b, relation: l.rel || null });
   }
   const edges = [...seen.values()];
   const pairList = edges.map((e) => [e.source, e.target]);
@@ -166,7 +174,94 @@ function buildGraph(notesDir, { hideHidden = false } = {}) {
     return { id, name: rep.label + ' çevresi', size: ns.length };
   });
 
-  return { nodes: nodeList, edges, communities };
+  return { nodes: nodeList, edges, communities, saglik: { ozdongu, cift } };
+}
+
+// --- rapor zekasi: grafi "kesfedilir" yapan analizler (LLM'siz, deterministik) ---
+// Graphify'in GRAPH_REPORT.md'sindeki uc fikrin karsiligi: obek butunlugu
+// (cohesion), sasirtici baglantilar (iki obek arasindaki TEK kopru) ve
+// haritanin kendisinden uretilen "sorulmaya deger" sorular.
+function buildReport(g) {
+  const real = g.nodes.filter((n) => !n.ghost);
+  const god = [...g.nodes].sort((a, b) => b.degree - a.degree)
+    .filter((n) => n.degree >= 3 && !n.ghost).slice(0, 8)
+    .map((n) => ({ label: n.label, degree: n.degree, type: n.type }));
+  const orphans = real.filter((n) => n.degree === 0).map((n) => n.label);
+  const ghosts = g.nodes.filter((n) => n.ghost).map((n) => n.label);
+
+  // obek butunlugu: ic kenar / (ic + disa acilan kenar). 1.0 = tamamen icine
+  // donuk obek, dusuk deger = zorlama gruplama ya da kopru-agirlikli obek.
+  const comm = new Map(g.nodes.map((n) => [n.id, n.community]));
+  const ic = new Map(), dis = new Map();
+  for (const e of g.edges) {
+    const ca = comm.get(e.source), cb = comm.get(e.target);
+    if (ca === cb) ic.set(ca, (ic.get(ca) || 0) + 1);
+    else { dis.set(ca, (dis.get(ca) || 0) + 1); dis.set(cb, (dis.get(cb) || 0) + 1); }
+  }
+  const topluluklar = g.communities.filter((c) => c.size >= 3).map((c) => {
+    const i = ic.get(c.id) || 0, d = dis.get(c.id) || 0;
+    return { ...c, butunluk: i + d ? +(i / (i + d)).toFixed(2) : 0 };
+  });
+
+  // sasirtici baglantilar: iki obegi birbirine baglayan TEK kenar. Kendi
+  // basina bakarken fark edilmez - haritanin en degerli kesif cikttisi.
+  const byId = new Map(g.nodes.map((n) => [n.id, n]));
+  const nameOf = new Map(g.communities.map((c) => [c.id, c.name]));
+  const sizeOf = new Map(g.communities.map((c) => [c.id, c.size]));
+  const koprular = new Map(); // "obekA|obekB" -> [kenarlar]
+  for (const e of g.edges) {
+    const ca = comm.get(e.source), cb = comm.get(e.target);
+    if (ca === cb) continue;
+    const k = Math.min(ca, cb) + '|' + Math.max(ca, cb);
+    if (!koprular.has(k)) koprular.set(k, []);
+    koprular.get(k).push(e);
+  }
+  const sasirtici = [];
+  for (const [k, es] of koprular) {
+    if (es.length !== 1) continue;
+    const [ca, cb] = k.split('|').map(Number);
+    if ((sizeOf.get(ca) || 0) < 3 || (sizeOf.get(cb) || 0) < 3) continue;
+    const e = es[0], a = byId.get(e.source), b = byId.get(e.target);
+    sasirtici.push({
+      a: a.label, b: b.label, relation: e.relation,
+      obekA: nameOf.get(ca), obekB: nameOf.get(cb),
+      agirlik: a.degree + b.degree,
+    });
+  }
+  sasirtici.sort((x, y) => y.agirlik - x.agirlik);
+  const sasirticiTop = sasirtici.slice(0, 5).map(({ agirlik, ...s }) => s);
+
+  // onerilen sorular: graf yapisindan uretilir, sablon + gercek veriler
+  const sorular = [];
+  for (const s of sasirticiTop.slice(0, 2))
+    sorular.push(`"${s.a}" ile "${s.b}" iki ayrı öbeğin (${s.obekA} / ${s.obekB}) TEK köprüsü — bu bağ derinleştirilmeli mi?`);
+  if (god[0])
+    sorular.push(`"${god[0].label}" haritanın en merkezi düğümü (${god[0].degree} bağlantı) — alt konulara bölünse daha mı okunur olur?`);
+  for (const o of orphans.slice(0, 2))
+    sorular.push(`"${o}" hiçbir şeye bağlı değil — hangi nota [[${o}]] diye bağlanmalı?`);
+  // hic koprusu olmayan iki buyuk obek: belki olmasi gereken bir iliski eksik
+  const buyukler = topluluklar.slice(0, 4);
+  dis_dongu:
+  for (let i = 0; i < buyukler.length; i++)
+    for (let j = i + 1; j < buyukler.length; j++) {
+      const k = Math.min(buyukler[i].id, buyukler[j].id) + '|' + Math.max(buyukler[i].id, buyukler[j].id);
+      if (!koprular.has(k)) {
+        sorular.push(`"${buyukler[i].name}" ile "${buyukler[j].name}" öbekleri arasında hiç bağlantı yok — olması gereken bir ilişki var mı?`);
+        break dis_dongu;
+      }
+    }
+
+  return {
+    dugum: g.nodes.length, kenar: g.edges.length,
+    saglik: {
+      ...(g.saglik || { ozdongu: 0, cift: 0 }),
+      kirikLink: ghosts.length,
+      durum: (g.saglik && (g.saglik.ozdongu || g.saglik.cift)) || ghosts.length
+        ? 'uyari' : 'temiz',
+    },
+    godNodes: god, yetimler: orphans, kirikLinkler: ghosts,
+    topluluklar, sasirtici: sasirticiTop, sorular: sorular.slice(0, 5),
+  };
 }
 
 // bir dugumu komsulariyla anlat (graphify'in `explain` komutunun karsiligi)
@@ -210,4 +305,4 @@ function firstLine(body) {
   return line ? line.replace(/^#+\s*/, '').trim().slice(0, 160) : '';
 }
 
-module.exports = { buildGraph, parseFrontmatter, collectLinks, detectCommunities, normName, explainNode, shortestPath };
+module.exports = { buildGraph, buildReport, parseFrontmatter, collectLinks, detectCommunities, normName, explainNode, shortestPath };
