@@ -187,18 +187,29 @@ function oneriTara(g, model, cb) {
 // taramasi - beyin sorulmadan da dusunur, ama yine SADECE onerir (onay
 // kuyruguna). AI-Hafiza/gunluk yazmalari tetiklemez (gurultu + dongu olmasin).
 // Kapatmak icin app-config.json: "otoZihin": false
+// Bekleyen tarama DISKE de yazilir: uygulama timer dolmadan kapanirsa,
+// sonraki aciliste kaldigi yerden tarar (degisiklik sessizce unutulmaz).
+const OTO_BEKLEYEN = path.join(DATA_DIR, 'oto-bekleyen.json');
 let otoTimer = null, otoCalisiyor = false;
+function otoCalistir() {
+  if (otoCalisiyor) return;
+  otoCalisiyor = true;
+  oneriTara(getGraph(false), 'qwen3:8b', (_, eklenen) => {
+    otoCalisiyor = false;
+    try { fs.unlinkSync(OTO_BEKLEYEN); } catch {} // tarama bitti, borc kapandi
+    if (eklenen.length) console.log(`oto-zihin: ${eklenen.length} yeni oneri kuyrukta`);
+  });
+}
 function otoZihin(name) {
   if (config.otoZihin === false || name.startsWith('AI-Hafiza')) return;
   clearTimeout(otoTimer);
-  otoTimer = setTimeout(() => {
-    if (otoCalisiyor) return;
-    otoCalisiyor = true;
-    oneriTara(getGraph(false), 'qwen3:8b', (_, eklenen) => {
-      otoCalisiyor = false;
-      if (eklenen.length) console.log(`oto-zihin: ${eklenen.length} yeni oneri kuyrukta`);
-    });
-  }, (Number(config.otoZihinSn) || 120) * 1000);
+  try { fs.writeFileSync(OTO_BEKLEYEN, JSON.stringify({ zaman: zihin.simdi(), not: name })); } catch {}
+  otoTimer = setTimeout(otoCalistir, (Number(config.otoZihinSn) || 120) * 1000);
+}
+// acilista yarim kalmis tarama var mi? (15 sn bekle: sunucu otursun, Ollama uyansin)
+if (config.otoZihin !== false && fs.existsSync(OTO_BEKLEYEN)) {
+  console.log('oto-zihin: onceki oturumdan bekleyen tarama bulundu, birazdan calisacak');
+  otoTimer = setTimeout(otoCalistir, 15000);
 }
 
 // POST govdesini topla (JSON bekleyen ucul icin)
@@ -262,10 +273,27 @@ function askOllama(model, prompt, cb) {
 // kullanimlik kodu bilmek + host'un onayi + kendi claimId'si. Kod dogru olsa
 // bile host onaylamadan token verilmez; token yalnizca durum yoklamasinda
 // BIR KEZ teslim edilir ve kod imha olur.
+// claim kaba kuvvet kalkani: 6 haneli kodu tahmin penceresi zaten 3 dk ama
+// hizli deneyen bir saldirgan yine de binlerce kod yoklayabilirdi. IP basina
+// dakikada 5 deneme -> pencere pratikte kapanir. Sadece claim sinirlanir;
+// durum yoklamasi (polling) mesru olarak sik calisir, ona dokunulmaz.
+const pairDenemeler = new Map(); // ip -> [zaman, ...]
+function pairHizAsildi(ip, simdi) {
+  const son = (pairDenemeler.get(ip) || []).filter((t) => simdi - t < 60000);
+  son.push(simdi);
+  pairDenemeler.set(ip, son);
+  if (pairDenemeler.size > 500) // eski IP'ler birikmesin
+    for (const [k, v] of pairDenemeler)
+      if (!v.some((t) => simdi - t < 60000)) pairDenemeler.delete(k);
+  return son.length > 5;
+}
+
 function handlePair(req, res, url, txt) {
   const p = url.pathname;
   // yeni cihaz kodu girer -> oturuma sahiplenir, host'a bildirim yayilir
   if (p === '/api/pair/claim' && req.method === 'POST') {
+    if (pairHizAsildi(req.socket.remoteAddress || '?', Date.now()))
+      return txt(429, 'cok fazla deneme - 1 dakika bekleyin');
     return readBody(req, (e, b) => {
       const r = esl.talep(b.kod, b.cihazAdi, Date.now());
       if (r.hata) return txt(404, r.hata);

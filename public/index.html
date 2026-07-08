@@ -688,12 +688,16 @@ async function copyEl(id, btn) {
 
 // --- ZIHIN HARITASI ---
 $('mapBtn').onclick = () => {
-  // parola iframe'e tasinir; AI-Hafiza gorunurlugu haritanin kendi 🧠 anahtarinda
-  const q = new URLSearchParams();
-  if (key) q.set('key', key);
-  $('mapFrame').src = 'harita.html' + (q.toString() ? '?' + q : '');
+  // parola URL'ye YAZILMAZ: harita "hazirim" deyince postMessage'la verilir
+  // (iframe src'de ?key= kalintisi adres gecmisine/loga dusmesin)
+  $('mapFrame').src = 'harita.html';
   $('mapOverlay').classList.add('open');
 };
+window.addEventListener('message', (ev) => {
+  if (ev.origin !== location.origin || !ev.data || ev.data.type !== 'harita-hazir') return;
+  const fr = $('mapFrame');
+  if (fr.contentWindow) fr.contentWindow.postMessage({ type: 'notlar-key', key: key || '' }, location.origin);
+});
 $('mapClose').onclick = () => {
   $('mapOverlay').classList.remove('open');
   $('mapFrame').src = 'about:blank'; // simulasyonu durdur, bellek bosalt

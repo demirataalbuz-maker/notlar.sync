@@ -96,7 +96,7 @@ elif kind == "gorsel":
         except Exception as e:
             out["hata"] = "vision hatasi: " + str(e)[:120]
     else:
-        out["hata"] = "Ollama'da vision modeli yok (or. ollama pull llava)"
+        out["hata"] = "Ollama'da vision modeli yok (or. ollama pull minicpm-v)"
 if out["text"] and models and not out["concepts"]:
     model = hardware.pick_model(models=models)
     if model:

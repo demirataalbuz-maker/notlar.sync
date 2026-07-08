@@ -161,6 +161,11 @@
 <script>
 // Uygulama icindeki canli harita: veri /api/graph'tan gelir, notlar
 // degisince WebSocket sinyaliyle yeniden cekilir (dugum konumlari korunur).
+// Parola URL'DE TASINMAZ: iframe icindeyken ana pencere postMessage ile verir
+// (adres cubugu / gecmis / log kalintisi olmasin). Dogrudan acilista ?key=
+// hala calisir (elle kullanim), ama uygulama artik oyle cagirmiyor.
+let KEY = new URLSearchParams(location.search).get('key') || '';
+const keyQ = () => KEY ? '?key=' + encodeURIComponent(KEY) : '';
 let DATA = { nodes: [], edges: [] };
 const COLORS = {
   user: '#5ec8c0', feedback: '#ef7fb1', project: '#e0b34d',
@@ -229,15 +234,13 @@ function sugFor(n) {
     .map(s => ({ node: byId[s.source === n.id ? s.target : s.source], neden: s.neden, sug: s }));
 }
 async function zihinPost(path, body) {
-  const q = params.get('key') ? '?key=' + encodeURIComponent(params.get('key')) : '';
-  const r = await fetch(path + q, { method: 'POST', body: JSON.stringify(body || {}) });
+  const r = await fetch(path + keyQ(), { method: 'POST', body: JSON.stringify(body || {}) });
   if (!r.ok) throw new Error(await r.text());
   return r.text();
 }
 async function refreshOneriler() {
   try {
-    const q = params.get('key') ? '?key=' + encodeURIComponent(params.get('key')) : '';
-    const st = await fetch('/api/graph/oneriler' + q).then(r => r.json());
+    const st = await fetch('/api/graph/oneriler' + keyQ()).then(r => r.json());
     sugEdges = (st.oneriler || []).filter(s => byId[s.source] && byId[s.target]);
   } catch (e) { /* sunucu gecici kapali olabilir */ }
   sugBadge();
@@ -592,15 +595,12 @@ sugBtn.addEventListener('click', async () => {
 // --- ⬇ disa aktar: motor (zihin-haritasi .venv) uzerinden. Motor bu makinede
 // yoksa buton hic gorunmez. svg/graphml/neo4j indirilir; obsidian/wiki klasore
 // yazilir ve yol gosterilir.
-(async () => {
+async function motorKontrol() {
   try {
-    // dikkat: `params` bu satirlardan SONRA tanimlaniyor (TDZ) - burada dogrudan oku
-    const p = new URLSearchParams(location.search);
-    const q = p.get('key') ? '?key=' + encodeURIComponent(p.get('key')) : '';
-    const m = await fetch('/api/motor' + q).then((r) => r.json());
+    const m = await fetch('/api/motor' + keyQ()).then((r) => r.json());
     if (m && m.var) document.getElementById('expWrap').style.display = '';
   } catch {}
-})();
+}
 const expMenu = document.getElementById('expMenu');
 [['svg', 'SVG görsel'], ['graphml', 'GraphML (Gephi/yEd)'], ['neo4j', 'Neo4j Cypher'], ['obsidian', 'Obsidian kasası'], ['wiki', 'Wiki sayfaları']].forEach(([f, ad]) => {
   const b = document.createElement('button');
@@ -609,7 +609,7 @@ const expMenu = document.getElementById('expMenu');
   b.onclick = async () => {
     expMenu.style.display = 'none';
     const q = new URLSearchParams({ format: f });
-    if (params.get('key')) q.set('key', params.get('key'));
+    if (KEY) q.set('key', KEY);
     if (showAI.checked) q.set('gizli', '1');
     if (f === 'obsidian' || f === 'wiki') {
       b.disabled = true;
@@ -722,8 +722,8 @@ function buildLegend() {
 }
 
 // --- veri: /api/graph'tan cek, notlar degisince yeniden cek ---
-// ?key= parolasi URL'den tasinir; AI-Hafiza notlari haritadaki 🧠 anahtariyla
-// acilir/kapanir (tercih localStorage'da kalir, ?gizli=1 ile de acilabilir)
+// AI-Hafiza notlari haritadaki 🧠 anahtariyla acilir/kapanir
+// (tercih localStorage'da kalir, ?gizli=1 ile de acilabilir)
 const params = new URLSearchParams(location.search);
 const showAI = document.getElementById('showAI');
 showAI.checked = params.get('gizli') === '1' || localStorage.getItem('haritaAI') === '1';
@@ -733,7 +733,7 @@ showAI.addEventListener('change', () => {
 });
 function graphUrl() {
   const q = new URLSearchParams();
-  if (params.get('key')) q.set('key', params.get('key'));
+  if (KEY) q.set('key', KEY);
   if (showAI.checked) q.set('gizli', '1');
   return '/api/graph' + (q.toString() ? '?' + q : '');
 }
@@ -746,19 +746,37 @@ async function refresh() {
 }
 function scheduleRefresh() { clearTimeout(reloadTimer); reloadTimer = setTimeout(refresh, 400); }
 
-refresh().then(refreshOneriler);
+// baslangic anahtar geldikten SONRA: yoksa ilk istekler 401 yiyip bos kalirdi
+let basladi = false;
+function basla() {
+  if (basladi) return;
+  basladi = true;
+  motorKontrol();
+  refresh().then(refreshOneriler);
+  // canli senkron: not eklenince/degisince/silinince harita kendini gunceller;
+  // oneri kuyrugu degisince (baska cihaz/ajan) oneriler de tazelenir
+  try {
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + keyQ());
+    ws.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.type === 'list' || m.type === 'content') scheduleRefresh();
+      if (m.type === 'oneri') refreshOneriler();
+    };
+  } catch (e) { /* ws yoksa harita yine de acilir, sadece canli guncellenmez */ }
+}
 
-// canli senkron: not eklenince/degisince/silinince harita kendini gunceller;
-// oneri kuyrugu degisince (baska cihaz/ajan) oneriler de tazelenir
-try {
-  const wsKey = params.get('key') ? '?key=' + encodeURIComponent(params.get('key')) : '';
-  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + wsKey);
-  ws.onmessage = (ev) => {
-    let m; try { m = JSON.parse(ev.data); } catch { return; }
-    if (m.type === 'list' || m.type === 'content') scheduleRefresh();
-    if (m.type === 'oneri') refreshOneriler();
-  };
-} catch (e) { /* ws yoksa harita yine de acilir, sadece canli guncellenmez */ }
+if (KEY || window.parent === window) basla(); // dogrudan/elle acilis
+else {
+  // iframe icindeyiz: ana pencereye "hazirim" de, anahtari postMessage'la al.
+  // 1.5 sn cevap gelmezse yine basla (parolasiz sunucuda her sey zaten acik).
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== location.origin || !ev.data || ev.data.type !== 'notlar-key') return;
+    KEY = ev.data.key || '';
+    basla();
+  });
+  window.parent.postMessage({ type: 'harita-hazir' }, location.origin);
+  setTimeout(basla, 1500);
+}
 </script>
 </body>
 </html>

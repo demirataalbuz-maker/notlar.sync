@@ -67,6 +67,12 @@ kontrol "pair: cihaz listede isimle"   "TestCihaz" curl -s -H "X-Api-Key: test12
 kontrol "pair: iptal edilir"           "iptal"  curl -s -X POST -H "X-Api-Key: test123" "$B/api/devices/iptal" -d "{\"token\":\"${TOKEN}\"}"
 kontrol "pair: iptalden sonra token 401" "parola" curl -s -H "X-Api-Key: ${TOKEN}" "$B/api/notes"
 kontrol "pair: gecersiz kod reddi"     "gecersiz" curl -s -X POST "$B/api/pair/claim" -d '{"kod":"000000","cihazAdi":"X"}'
+# kaba kuvvet kalkani: ayni IP'den arka arkaya claim -> 429 (bu test EN SONDA
+# olmali, oncesindeki mesru claim'leri bogmasin)
+kontrol "pair: claim hiz siniri (429)" "cok fazla" bash -c "R=''; for i in 1 2 3 4 5 6; do R=\$(curl -s -X POST '$B/api/pair/claim' -d '{\"kod\":\"111111\",\"cihazAdi\":\"BruteBot\"}'); done; echo \"\$R\""
+
+# oto-zihin: not yazilinca bekleyen tarama DISKE dusmus olmali (kapaninca kaybolmaz)
+kontrol "oto-zihin bekleyen tarama diskte" "zaman" cat "$T/NotlarSync/oto-bekleyen.json"
 
 echo
 echo "sonuc: $GECTI gecti, $KALDI kaldi"

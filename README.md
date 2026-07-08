@@ -132,7 +132,7 @@ Aynı makinede `~/zihin-haritasi` kuruluysa (`python3 kur.py`) uygulama onu
 hiç görünmez, uygulama bağımlılıksız kalır:
 
 - **📎 Belge ekle** (kenar çubuğu): PDF / görsel / ses / video seç — motor metni
-  çıkarır (PDF: pdftotext, ses/video: whisper, görsel: llava), local AI ana
+  çıkarır (PDF: pdftotext, ses/video: whisper, görsel: minicpm-v/llava), local AI ana
   kavramları `[[link]]` yapar ve hepsi bir **not** olur; haritaya düşer,
   Ollama mevcut notlarla ilişki önerir (yine onaylı kuyruğa).
 - **⬇ Dışa aktar** (haritada): SVG, GraphML (Gephi/yEd), Neo4j Cypher,
