@@ -49,6 +49,24 @@ kontrol "motor yokken belge 503"  "motor yok"      curl -s -X POST -d "x" "$B/ap
 kontrol "motor yokken export"     "motor"          curl -s "$B/api/graph/export?format=svg&$K"
 kontrol "gecersiz export formati" "format"         curl -s "$B/api/graph/export?format=xxx&$K"
 kontrol "not silme sonrasi 404"   "not yok"        bash -c "curl -s -X DELETE '$B/api/note/Yeni?$K' >/dev/null 2>&1; curl -s '$B/api/note/SilinmisHayalet?$K'"
+kontrol "X-Api-Key header ile auth" "Birinci"      curl -s -H "X-Api-Key: test123" "$B/api/notes"
+
+# --- eslestirme: tek kullanimlik kod + cift onay + token yasam dongusu ---
+KOD=$(curl -s -X POST -H "X-Api-Key: test123" "$B/api/pair/new" | sed -n 's/.*"kod":"\([0-9]*\)".*/\1/p')
+kontrol "pair: kod uretildi (6 hane)" "6" bash -c "echo -n '${KOD}' | wc -c"
+CLAIMID=$(curl -s -X POST "$B/api/pair/claim" -d "{\"kod\":\"$KOD\",\"cihazAdi\":\"TestCihaz\"}" | sed -n 's/.*"claimId":"\([a-f0-9]*\)".*/\1/p')
+kontrol "pair: cihaz claim aldi"     "3"       bash -c "echo -n '${CLAIMID}' | wc -c | awk '{print (\$1>0)?3:0}'"
+kontrol "pair: host talebi isimle gorur" "TestCihaz" curl -s -H "X-Api-Key: test123" "$B/api/pair/talepler"
+kontrol "pair: tek onayda token YOK" "bekliyor" bash -c "curl -s -X POST '$B/api/pair/cihaz-onay' -d '{\"kod\":\"$KOD\",\"claimId\":\"$CLAIMID\"}' >/dev/null; curl -s '$B/api/pair/durum?kod=$KOD&claimId=$CLAIMID'"
+curl -s -X POST -H "X-Api-Key: test123" "$B/api/pair/host-onay" -d "{\"kod\":\"$KOD\"}" >/dev/null
+TOKEN=$(curl -s "$B/api/pair/durum?kod=$KOD&claimId=$CLAIMID" | sed -n 's/.*"token":"\([a-z0-9_]*\)".*/\1/p')
+kontrol "pair: cift onayda token uretildi" "dev_" bash -c "echo '${TOKEN}'"
+kontrol "pair: token ile erisim (parolasiz)" "Birinci" curl -s -H "X-Api-Key: ${TOKEN}" "$B/api/notes"
+kontrol "pair: kod imha (tekrar yok)"  "yok"    curl -s "$B/api/pair/durum?kod=$KOD&claimId=$CLAIMID"
+kontrol "pair: cihaz listede isimle"   "TestCihaz" curl -s -H "X-Api-Key: test123" "$B/api/devices"
+kontrol "pair: iptal edilir"           "iptal"  curl -s -X POST -H "X-Api-Key: test123" "$B/api/devices/iptal" -d "{\"token\":\"${TOKEN}\"}"
+kontrol "pair: iptalden sonra token 401" "parola" curl -s -H "X-Api-Key: ${TOKEN}" "$B/api/notes"
+kontrol "pair: gecersiz kod reddi"     "gecersiz" curl -s -X POST "$B/api/pair/claim" -d '{"kod":"000000","cihazAdi":"X"}'
 
 echo
 echo "sonuc: $GECTI gecti, $KALDI kaldi"

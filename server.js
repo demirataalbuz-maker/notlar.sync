@@ -9,6 +9,7 @@ const { WebSocketServer } = require('ws');
 const { buildGraph, buildReport, explainNode, shortestPath } = require('./graph');
 const zihin = require('./zihin');
 const kopru = require('./kopru');
+const esl = require('./eslestirme');
 
 const PORT = Number(process.env.PORT) || 7777;
 
@@ -26,6 +27,19 @@ if (!fs.existsSync(CONFIG_PATH)) {
 }
 const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
 const PASSWORD = config.password ?? ''; // "" = parola kapali
+
+// Bir istek yetkili mi? Kabul edilen anahtar = ana parola VEYA eslestirmeyle
+// uretilmis bir cihaz token'i. Parola "" ise herkese acik (yerel kullanim).
+// Header (X-Api-Key) ya da ?key= - header tercih edilir (URL loga sizmasin).
+function keyOf(req, url) {
+  return (req && req.headers && req.headers['x-api-key']) || url.searchParams.get('key') || '';
+}
+function authOk(k) {
+  if (!PASSWORD) return true;
+  if (k === PASSWORD) return true;
+  if (esl.tokenGecerli(DATA_DIR, k)) { esl.tokenGoruldu(DATA_DIR, k, zihin.simdi()); return true; }
+  return false;
+}
 
 // --- yardimcilar ---
 const safeName = (n) => typeof n === 'string' ? n.replace(/[^a-zA-Z0-9ğüşöçıİĞÜŞÖÇ _\-.]/g, '').trim() : '';
@@ -244,16 +258,55 @@ function askOllama(model, prompt, cb) {
 // GET  /api/notes            -> not listesi (JSON)
 // GET  /api/note/ISIM        -> not icerigi (duz metin)
 // POST /api/note/ISIM        -> notu yaz (govde = icerik); ?append=1 -> sona ekle
-function handleApi(req, res, url) {
-  if (PASSWORD && url.searchParams.get('key') !== PASSWORD) {
-    res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('parola yanlis (?key=... ekle)');
-    return;
+// Yeni cihaz tarafi: henuz token'i yok, bu yuzden AUTHSIZ. Guvenlik = tek
+// kullanimlik kodu bilmek + host'un onayi + kendi claimId'si. Kod dogru olsa
+// bile host onaylamadan token verilmez; token yalnizca durum yoklamasinda
+// BIR KEZ teslim edilir ve kod imha olur.
+function handlePair(req, res, url, txt) {
+  const p = url.pathname;
+  // yeni cihaz kodu girer -> oturuma sahiplenir, host'a bildirim yayilir
+  if (p === '/api/pair/claim' && req.method === 'POST') {
+    return readBody(req, (e, b) => {
+      const r = esl.talep(b.kod, b.cihazAdi, Date.now());
+      if (r.hata) return txt(404, r.hata);
+      broadcast({ type: 'pair' }); // authed cihazlar onay kutusunu tazeler
+      txt(200, JSON.stringify(r), 'application/json');
+    });
   }
+  // yeni cihaz kendi tarafini onaylar (claimId ile kanitli)
+  if (p === '/api/pair/cihaz-onay' && req.method === 'POST') {
+    return readBody(req, (e, b) => {
+      const r = esl.onayla(b.kod, 'cihaz', String(b.claimId || ''), DATA_DIR, zihin.simdi());
+      if (r.hata) return txt(403, r.hata);
+      broadcast({ type: 'pair' });
+      txt(200, JSON.stringify(r), 'application/json');
+    });
+  }
+  // yeni cihaz durumu yoklar; onaylandiysa token'i BIR KEZ alir (kod imha)
+  if (p === '/api/pair/durum' && req.method === 'GET') {
+    const r = esl.durum(url.searchParams.get('kod'), url.searchParams.get('claimId'), Date.now());
+    return txt(r.hata ? 403 : 200, JSON.stringify(r), 'application/json');
+  }
+  return txt(404, 'yok');
+}
+
+function handleApi(req, res, url) {
   const txt = (code, body, type) => {
     res.writeHead(code, { 'Content-Type': (type || 'text/plain') + '; charset=utf-8' });
     res.end(body);
   };
+
+  // yeni-cihaz tarafi uclari kimlik ISTEMEZ (henuz token'i yok) - guvenlik
+  // tek kullanimlik kod + claimId + cift onayla saglanir. Digerleri (kod
+  // uretme, host onayi, cihaz listesi) authed'dir, asagida akar.
+  if (['/api/pair/claim', '/api/pair/cihaz-onay', '/api/pair/durum'].includes(url.pathname))
+    return handlePair(req, res, url, txt);
+
+  if (!authOk(keyOf(req, url))) {
+    res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('parola yanlis (?key=... ya da X-Api-Key)');
+    return;
+  }
 
   if (url.pathname === '/api/notes' && req.method === 'GET')
     return txt(200, JSON.stringify(listNotes()), 'application/json');
@@ -440,6 +493,39 @@ function handleApi(req, res, url) {
 
   if (url.pathname === '/api/pair-code' && req.method === 'GET')
     return makePairCode((code) => txt(200, code));
+
+  // --- yeni eslestirme: tek kullanimlik kod + cift onay + cihaz token'i ---
+  // ana cihaz kod uretir (bu uc AUTHED - handleApi baslangicinda gecti)
+  if (url.pathname === '/api/pair/new' && req.method === 'POST') {
+    const kod = esl.kodUret(Date.now());
+    getHostAddress((addr) => txt(200, JSON.stringify({ kod, adres: 'http://' + addr + ':' + PORT }), 'application/json'));
+    return;
+  }
+  // host tarafi bir talebi onaylar/reddeder (AUTHED). Reddet = oturumu dusur.
+  if (url.pathname === '/api/pair/host-onay' && req.method === 'POST') {
+    return readBody(req, (e, b) => {
+      if (b && b.reddet) { esl.reddet(b.kod); broadcast({ type: 'pair' }); return txt(200, 'reddedildi'); }
+      const r = esl.onayla(b.kod, 'host', null, DATA_DIR, zihin.simdi());
+      if (r.hata) return txt(409, r.hata);
+      if (r.bitti) gunlukYaz(`yeni cihaz eslesti: "${(esl.bekleyenTalepler().find((t) => t.kod === b.kod) || {}).cihazAdi || 'cihaz'}" (cift onay)`);
+      broadcast({ type: 'pair' });
+      txt(200, JSON.stringify(r), 'application/json');
+    });
+  }
+  // authed cihazlarin gorecegi bekleyen talepler (onay kutusu icin)
+  if (url.pathname === '/api/pair/talepler' && req.method === 'GET')
+    return txt(200, JSON.stringify(esl.bekleyenTalepler()), 'application/json');
+
+  // --- bagli cihazlar: isimle listele + tek tek iptal (AUTHED) ---
+  if (url.pathname === '/api/devices' && req.method === 'GET')
+    return txt(200, JSON.stringify(esl.cihazlariOku(DATA_DIR)), 'application/json');
+  if (url.pathname === '/api/devices/iptal' && req.method === 'POST') {
+    return readBody(req, (e, b) => {
+      const oldu = esl.cihazSil(DATA_DIR, String(b.token || ''));
+      if (oldu) gunlukYaz('cihaz baglantisi iptal edildi (token silindi)');
+      txt(oldu ? 200 : 404, oldu ? 'iptal edildi' : 'cihaz yok');
+    });
+  }
 
   // --- sifreli kasa deposu (sifir-bilgi: sunucu blob'u saklar, icini ACAMAZ) ---
   // sifreleme/cozme istemcide (Web Crypto). blob ana parolayla sifreli, gitignored.
@@ -637,7 +723,7 @@ const server = http.createServer((req, res) => {
   if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
   // nota yapistirilan gorseller (~/NotlarSync/files) - parola varsa istenir
   if (url.pathname.startsWith('/files/')) {
-    if (PASSWORD && url.searchParams.get('key') !== PASSWORD) { res.writeHead(401); res.end('parola'); return; }
+    if (!authOk(keyOf(req, url))) { res.writeHead(401); res.end('parola'); return; }
     const fp = path.join(DATA_DIR, 'files', path.basename(url.pathname));
     return fs.readFile(fp, (err, data) => {
       if (err) { res.writeHead(404); res.end('yok'); return; }
@@ -671,7 +757,7 @@ wss.on('connection', (ws, req) => {
   // parola kontrolu: ws://host:7777/?key=PAROLA
   // config'de password bos ("") birakilirsa parola sorulmaz
   const key = new URL(req.url, 'http://x').searchParams.get('key') || '';
-  if (PASSWORD && key !== PASSWORD) { ws.close(4001, 'parola yanlis'); return; }
+  if (!authOk(key)) { ws.close(4001, 'parola yanlis'); return; }
 
   ws.send(JSON.stringify({ type: 'list', notes: listNotes() }));
 

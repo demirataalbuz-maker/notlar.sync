@@ -49,9 +49,12 @@
 
   <div class="sep">— veya —</div>
   <div id="pairWrap">
-    <p style="margin-bottom:8px">Zaten bir ana cihazın mı var? Oradaki <b>Ayarlar → Bağlantı kodu</b>'nu yapıştır:</p>
-    <textarea id="kod" rows="2" placeholder="NTLR1-..."></textarea>
-    <button class="btn" id="baglanBtn">Bu koda bağlan</button>
+    <p style="margin-bottom:8px">Zaten bir ana cihazın mı var? Oradan <b>Ayarlar → Başka cihaz eşleştir</b> ile <b>6 haneli kod</b> üret, aşağıya gir:</p>
+    <input id="adres" placeholder="Ana cihaz adresi (örn. http://100.x.x.x:7777)" style="width:100%;background:#262626;border:1px solid #3f3f3f;color:#dadada;border-radius:7px;padding:9px;margin-bottom:8px;outline:none">
+    <input id="cihazAd" placeholder="Bu cihazın adı (örn. Dizüstü)" style="width:100%;background:#262626;border:1px solid #3f3f3f;color:#dadada;border-radius:7px;padding:9px;margin-bottom:8px;outline:none">
+    <input id="kod" placeholder="6 haneli kod" inputmode="numeric" maxlength="6" style="width:100%;background:#262626;border:1px solid #3f3f3f;color:#dadada;border-radius:7px;padding:9px;font-family:monospace;font-size:18px;letter-spacing:4px;text-align:center;margin-bottom:8px;outline:none">
+    <button class="btn" id="baglanBtn">Eşleştir</button>
+    <div id="pairDurum" style="font-size:13px;min-height:16px;margin-top:8px;color:var(--muted)"></div>
     <div id="pairErr" style="color:#e74c3c;font-size:13px;min-height:16px"></div>
   </div>
 </div>
@@ -85,23 +88,52 @@ $('atla').onclick = () => {
   bitti();
 };
 
-// kod ile baglan: NTLR1-<base64url({s,p})> -> client config yaz
-$('baglanBtn').onclick = () => {
-  const raw = $('kod').value.trim();
-  $('pairErr').textContent = '';
+// Tek kullanımlık kod + çift onay + token akışı:
+// 1) kodu ana cihaza gönder (claim) -> claimId al
+// 2) bu cihaz onaylar (cihaz-onay)
+// 3) ana cihaz da onaylayana kadar durum yokla -> token gelince config'e yaz
+// Parola HİÇ gelmez; gelen token bu cihazın kendi iptal edilebilir anahtarıdır.
+let pollTimer = null;
+$('baglanBtn').onclick = async () => {
+  const adres = $('adres').value.trim().replace(/\/$/, '');
+  const kod = $('kod').value.trim();
+  const cihazAd = $('cihazAd').value.trim() || 'İsimsiz cihaz';
+  $('pairErr').textContent = ''; $('pairDurum').textContent = '';
+  if (!/^https?:\/\//.test(adres)) { $('pairErr').textContent = 'Geçerli bir adres gir (http://... ile başlamalı).'; return; }
+  if (!/^\d{6}$/.test(kod)) { $('pairErr').textContent = 'Kod 6 haneli olmalı.'; return; }
+  $('baglanBtn').disabled = true;
   try {
-    if (!raw.startsWith('NTLR1-')) throw 0;
-    const p = JSON.parse(Buffer.from(raw.slice(6), 'base64url').toString('utf8'));
-    if (!p.s) throw 0;
-    patchConfig((c) => {
-      c.mode = 'client';
-      c.server = p.s;
-      c.password = p.p || '';
-      c.setupDone = true;
+    const claimR = await fetch(adres + '/api/pair/claim', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kod, cihazAdi: cihazAd }),
     });
-    bitti(); // main yeniden baslatir, artik bu adrese baglanir
-  } catch {
-    $('pairErr').textContent = 'Kod geçersiz. Ana cihazdaki Ayarlar → Bağlantı kodu\'ndan kopyala.';
+    if (!claimR.ok) throw new Error(await claimR.text());
+    const { claimId } = await claimR.json();
+    // bu cihaz kendi onayını verir
+    await fetch(adres + '/api/pair/cihaz-onay', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kod, claimId }),
+    });
+    $('pairDurum').textContent = '✓ Sen onayladın. Şimdi ANA CİHAZDA da "Onayla"ya bas — bekleniyor…';
+    // ana cihazın onayını bekle
+    pollTimer = setInterval(async () => {
+      try {
+        const s = await fetch(adres + '/api/pair/durum?kod=' + kod + '&claimId=' + encodeURIComponent(claimId)).then((r) => r.json());
+        if (s.durum === 'onaylandi' && s.token) {
+          clearInterval(pollTimer);
+          patchConfig((c) => { c.mode = 'client'; c.server = adres; c.password = s.token; c.setupDone = true; });
+          $('pairDurum').textContent = '✅ Eşleşme tamam! Bağlanılıyor…';
+          setTimeout(bitti, 800);
+        } else if (s.durum === 'yok') {
+          clearInterval(pollTimer);
+          $('baglanBtn').disabled = false;
+          $('pairErr').textContent = 'Eşleşme iptal oldu ya da kodun süresi geçti. Yeni kod al, tekrar dene.';
+        }
+      } catch {}
+    }, 1500);
+  } catch (e) {
+    $('baglanBtn').disabled = false;
+    $('pairErr').textContent = 'Olmadı: ' + String(e.message || e).slice(0, 80);
   }
 };
 

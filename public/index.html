@@ -291,16 +291,35 @@
     </div>
     <iframe id="mapFrame" title="Zihin Haritası"></iframe>
   </div>
+  <!-- EŞLEŞTIRME ONAY KUTUSU (yeni cihaz bağlanmak isteyince açılır) -->
+  <div id="pairModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:60;align-items:center;justify-content:center">
+    <div style="background:var(--bg2,#262626);border:1px solid var(--border,#3f3f3f);border-radius:12px;padding:24px;width:340px;text-align:center">
+      <div style="font-size:40px">📱</div>
+      <h2 style="font-size:18px;margin:8px 0"><span id="pairCihazAd"></span> bağlanmak istiyor</h2>
+      <p style="font-size:13px;color:var(--muted,#999);margin-bottom:16px">Kod: <b id="pairModalKod"></b> · Bu cihazı sen mi bağlıyorsun? Onaylarsan notlarına erişebilecek.</p>
+      <div style="display:flex;gap:10px">
+        <button class="sBtn" id="pairOnay" style="flex:1">✓ Onayla</button>
+        <button class="sBtn gri" id="pairRet" style="flex:1">✗ Reddet</button>
+      </div>
+      <div id="pairModalDurum" style="font-size:12px;color:var(--muted,#999);margin-top:10px"></div>
+    </div>
+  </div>
   <div id="settings">
     <div id="settingsCard">
       <h2>Ayarlar <button id="kapatSet" title="Kapat">✕</button></h2>
 
       <div class="sBlok" style="border-top:none;padding-top:0">
-        <h3>Başka cihaz bağla</h3>
-        <p>Bu koda sahip cihaz, kurulum ekranına yapıştırınca doğrudan bu cihazdaki notlara bağlanır. (Adres + parola koda gömülü — kodu güvendiğin cihazla paylaş.)</p>
-        <textarea id="pairCode" rows="2" readonly></textarea>
-        <button class="sBtn" id="kodBtn">Bağlantı kodu oluştur</button>
-        <button class="sBtn gri" id="kopyalaBtn" style="display:none">Kopyala</button>
+        <h3>Başka cihaz eşleştir</h3>
+        <p>Tek kullanımlık 6 haneli kod üretilir. Yeni cihaz bu kodu girer, <b>iki cihaz da onaylar</b>, sonra kod yok olur. Parolan cihazdan cihaza <b>hiç taşınmaz</b> — her cihaz kendi iptal edilebilir anahtarını alır.</p>
+        <div id="pairKod" style="display:none;font-size:32px;letter-spacing:6px;text-align:center;font-family:monospace;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px"></div>
+        <div id="pairKodNot" style="display:none;font-size:12px;color:var(--muted);text-align:center;margin-bottom:8px"></div>
+        <button class="sBtn" id="kodBtn">Eşleştirme kodu üret</button>
+      </div>
+
+      <div class="sBlok" id="cihazBlok">
+        <h3>Bağlı cihazlar</h3>
+        <p>Bu beyne erişimi olan cihazlar. Birini kaybedersen sadece onun anahtarını iptal et — diğerleri etkilenmez.</p>
+        <div id="cihazListe" style="font-size:13px">yükleniyor…</div>
       </div>
 
       <div class="sBlok">
@@ -447,6 +466,7 @@ function connect() {
     $('statusText').textContent = 'Bağlı — anlık senkron açık';
     const m = JSON.parse(e.data);
     if (m.type === 'list') {
+      if (!pairYoklandi) { pairYoklandi = true; pairKontrol(); } // acilista bekleyen talep var mi
       notes = m.notes;
       // acik not baska cihazda silindiyse hayalet olarak kalmasin
       if (current && !notes.includes(current)) closeNote();
@@ -456,6 +476,8 @@ function connect() {
     // baska bir notta yapilan degisiklik bu nota [[link]] eklemis olabilir
     if (m.type === 'content' && m.name !== current && current) blTimerKur();
     if (m.type === 'created') openNote(m.name);
+    // yeni cihaz bağlanmak istiyor / onay durumu değişti -> onay kutusunu tazele
+    if (m.type === 'pair') pairKontrol();
     // motor belge islemeyi bitirdi (basari da hata da tum cihazlara duyurulur)
     if (m.type === 'belge')
       $('statusText').textContent = m.hata
@@ -563,8 +585,12 @@ $('burger').onclick = () => $('sidebar').classList.toggle('open');
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 // --- ayarlar penceresi ---
+// header ile kimlik: parola/token URL'de degil X-Api-Key'de gider (loga sizmasin)
+function authH() { return key ? { 'X-Api-Key': key, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }; }
+
 $('setBtn').onclick = () => {
   $('settings').style.display = 'flex';
+  cihazlariYukle(); // bagli cihazlari tazele
   // gizli AI notlarini listele
   const hid = notes.filter(isHidden);
   $('hidBos').style.display = hid.length ? 'none' : '';
@@ -579,23 +605,75 @@ $('setBtn').onclick = () => {
 $('kapatSet').onclick = () => { $('settings').style.display = 'none'; };
 $('settings').onclick = (e) => { if (e.target.id === 'settings') $('settings').style.display = 'none'; };
 
+// --- eşleştirme: tek kullanımlık kod üret (parola İÇERMEZ) ---
 $('kodBtn').onclick = async () => {
-  $('kodBtn').textContent = 'Oluşturuluyor...';
+  $('kodBtn').textContent = 'Üretiliyor...';
   try {
-    const r = await fetch('/api/pair-code' + (key ? '?key=' + encodeURIComponent(key) : ''));
-    const code = await r.text();
-    $('pairCode').value = code;
-    $('pairCode').style.display = 'block';
-    $('kodBtn').style.display = 'none';
-    $('kopyalaBtn').style.display = '';
+    const r = await fetch('/api/pair/new', { method: 'POST', headers: authH() });
+    const d = await r.json();
+    $('pairKod').textContent = d.kod;
+    $('pairKod').style.display = 'block';
+    $('pairKodNot').textContent = 'Yeni cihazda bu kodu gir · 3 dakika geçerli · adres: ' + d.adres;
+    $('pairKodNot').style.display = 'block';
+    $('kodBtn').textContent = 'Yeni kod üret';
   } catch { $('kodBtn').textContent = 'Olmadı, tekrar dene'; }
 };
-$('kopyalaBtn').onclick = () => {
-  const t = $('pairCode'); t.select();
-  navigator.clipboard.writeText(t.value).then(() => {
-    $('kopyalaBtn').textContent = 'Kopyalandı ✓';
-    setTimeout(() => { $('kopyalaBtn').textContent = 'Kopyala'; }, 1500);
-  });
+
+// --- bağlı cihazlar: isimle listele + tek tek iptal ---
+async function cihazlariYukle() {
+  try {
+    const list = await fetch('/api/devices', { headers: authH() }).then((r) => r.json());
+    const box = $('cihazListe');
+    if (!list.length) { box.textContent = 'Henüz eşleşmiş cihaz yok.'; return; }
+    box.innerHTML = '';
+    list.forEach((c) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border,#3f3f3f)';
+      const zaman = typeof c.sonGorulme === 'number'
+        ? new Date(c.sonGorulme).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })
+        : (c.sonGorulme || '—');
+      row.innerHTML = '<span>📱 <b>' + esc(c.ad) + '</b> <span style="color:var(--muted,#999);font-size:11px">· son görülme: ' + esc(zaman) + '</span></span>';
+      const b = document.createElement('button');
+      b.className = 'sBtn gri'; b.textContent = 'İptal'; b.style.cssText = 'padding:4px 10px;font-size:12px';
+      b.onclick = async () => {
+        b.disabled = true;
+        await fetch('/api/devices/iptal', { method: 'POST', headers: authH(), body: JSON.stringify({ token: c.token }) });
+        cihazlariYukle();
+      };
+      row.appendChild(b); box.appendChild(row);
+    });
+  } catch { $('cihazListe').textContent = 'Liste alınamadı.'; }
+}
+
+// --- host onay kutusu: yeni cihaz bağlanmak isteyince WS 'pair' sinyaliyle açılır ---
+let pairAktifKod = null, pairYoklandi = false;
+async function pairKontrol() {
+  try {
+    const talepler = await fetch('/api/pair/talepler', { headers: authH() }).then((r) => r.json());
+    const bekleyen = talepler.find((t) => !t.hostOnay);
+    if (bekleyen) {
+      pairAktifKod = bekleyen.kod;
+      $('pairCihazAd').textContent = bekleyen.cihazAdi;
+      $('pairModalKod').textContent = bekleyen.kod;
+      $('pairModalDurum').textContent = bekleyen.cihazOnay ? 'Yeni cihaz onayladı, sıra sende.' : 'Yeni cihazın da onaylaması bekleniyor.';
+      $('pairModal').style.display = 'flex';
+    } else if (!talepler.length) {
+      $('pairModal').style.display = 'none';
+    }
+  } catch {}
+}
+$('pairOnay').onclick = async () => {
+  if (!pairAktifKod) return;
+  $('pairOnay').disabled = true;
+  await fetch('/api/pair/host-onay', { method: 'POST', headers: authH(), body: JSON.stringify({ kod: pairAktifKod }) });
+  $('pairOnay').disabled = false;
+  $('pairModal').style.display = 'none';
+  cihazlariYukle();
+};
+$('pairRet').onclick = async () => {
+  if (!pairAktifKod) return;
+  await fetch('/api/pair/host-onay', { method: 'POST', headers: authH(), body: JSON.stringify({ kod: pairAktifKod, reddet: true }) });
+  $('pairModal').style.display = 'none';
 };
 
 // --- ortak: pencere ac/kapa + authed fetch ---
