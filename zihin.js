@@ -323,13 +323,19 @@ function graphQuery(dataDir, graph, soru, readNote, secenek, cb) {
   // bulut moduna gizli notlar hic dogmamis gibi davranir
   const gorunur = (n) => !n.ghost && !(secenek.bulut && gizliNot(govdeOf(n)));
 
-  // tohum katman 1: etiket/aciklamasinda soru kelimesi gecenler
+  // tohum katman 1: etiket/aciklama VE GOVDEDE soru kelimesi gecenler.
+  // Olcum seti dersi: "cadir" govdede birebir varken bulunamiyordu cunku
+  // sadece etikete bakiliyordu. Ek sorunu icin kaba kok: 5+ karakterlik
+  // onek eslesmesi ("muayenesi" ~ "muayene", "kabarmasi" ~ "kabarma").
+  const esles = (a, b) => a === b
+    || (a.length >= 5 && b.length >= 5 && (a.startsWith(b) || b.startsWith(a)));
+  const soruListe = [...sorular];
   const skor = new Map();
   for (const n of graph.nodes) {
     if (!gorunur(n)) continue;
-    const metin = kelime(n.label + ' ' + (n.description || ''));
+    const metin = kelime(n.label + ' ' + (n.description || '') + ' ' + govdeOf(n));
     let s = 0;
-    for (const w of metin) if (sorular.has(w)) s++;
+    for (const w of metin) if (soruListe.some((q) => esles(w, q))) s++;
     if (s) skor.set(n.id, s);
   }
   const kelimeTohum = [...skor.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id]) => id);
