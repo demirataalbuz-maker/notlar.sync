@@ -154,7 +154,7 @@ function oneriTara(g, model, cb) {
   if (real.length < 2) return cb(null, []);
   const liste = real.map((n) => `- ${n.label}: ${(n.description || '').slice(0, 120)}`).join('\n');
   const prompt = 'Asagida bir kisinin notlari var. Icerik olarak birbiriyle ILGILI olabilecek en fazla 6 not cifti oner. SADECE su formatta JSON dizisi dondur, baska hicbir sey yazma: [{"a":"not adi","b":"not adi","neden":"3-6 kelimelik gerekce"}]\n\n' + liste;
-  zihin.semanticSuggest(DATA_DIR, g, (embedItems) => {
+  zihin.semanticSuggest(DATA_DIR, g, readNote, (embedItems) => {
     const e1 = zihin.addSuggestions(DATA_DIR, g, embedItems, 'embedding');
     askOllama(model, prompt, (err, out) => {
       let e2 = [];
@@ -328,7 +328,14 @@ function handleApi(req, res, url) {
         let name = orjinal.replace(/\.[a-z0-9]+$/i, '').trim().slice(0, 60) || 'belge';
         while (readNote(name) !== undefined) name += ' 2'; // mevcut notu ezme
         const metin = (sonuc.text || '').trim();
-        const kavram = (sonuc.concepts || []).filter(Boolean);
+        // kavram kalite filtresi: vision/LLM bazen kavram yerine cumle dondurur
+        // ("gibi bir ornek olabilir. Ancak") - cop haritaya dugum olmasin.
+        // Gercek kavram: 1-3 kelime, <=30 karakter, noktalama yok, tekil.
+        const gorulen = new Set();
+        const kavram = (sonuc.concepts || []).filter(Boolean)
+          .map((k) => String(k).trim())
+          .filter((k) => k && k.length <= 30 && k.split(/\s+/).length <= 3 && !/[.,;:!?()]/.test(k))
+          .filter((k) => { const n = k.toLowerCase(); return gorulen.has(n) ? false : gorulen.add(n); });
         const desc = (metin ? metin.replace(/\s+/g, ' ').slice(0, 160) : kavram.join(', ').slice(0, 160)).replace(/"/g, "'");
         const icerik = [
           '---',

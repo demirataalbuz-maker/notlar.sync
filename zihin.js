@@ -188,38 +188,49 @@ const kosinus = (a, b) => {
   return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
 };
 
-// dugum vektorlerini getir: SHA256 onbellekli, eksikler tek istekte Ollama'ya.
-// Hem semantik oneri hem GraphRAG tohum bulma ayni onbellegi paylasir.
-const nodeMetin = (n) => n.label + ': ' + (n.description || '').slice(0, 200);
+// dugumun anlam metni: etiket + aciklama + NOT GOVDESI (ilk ~500 karakter,
+// frontmatter atilir). Boylece frontmatter'siz notlar da anlam katmanina
+// gorunur - sadece description'a bakmak korluk yaratiyordu.
+function nodeMetin(n, readNote) {
+  const ham = n.file && readNote ? (readNote(n.file.replace(/\.md$/, '')) || '') : '';
+  const govde = ham.replace(/^---[\s\S]*?---\s*/, '').replace(/\s+/g, ' ').trim();
+  return (n.label + ': ' + (n.description || '') + ' ' + govde).slice(0, 500);
+}
 
-function vektorler(dataDir, model, adaylar, cb) {
+// dugum vektorlerini getir: SHA256 onbellekli (metin degisince anahtar da
+// degisir, eski vektor kullanilmaz), eksikler tek istekte Ollama'ya.
+// Hem semantik oneri hem GraphRAG tohum bulma ayni onbellegi paylasir.
+function vektorler(dataDir, model, adaylar, readNote, cb) {
+  const metin = (n) => nodeMetin(n, readNote);
   const anahtar = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 24);
   const cachePath = path.join(dataDir, 'embed-cache.json');
   let cache = {};
   try { cache = JSON.parse(fs.readFileSync(cachePath, 'utf8')); } catch {}
-  const eksik = adaylar.filter((n) => !cache[anahtar(nodeMetin(n))]);
+  const eksik = adaylar.filter((n) => !cache[anahtar(metin(n))]);
   const bitir = () => {
     try { fs.writeFileSync(cachePath, JSON.stringify(cache)); } catch {}
-    cb(new Map(adaylar.map((n) => [n.id, cache[anahtar(nodeMetin(n))]])
+    cb(new Map(adaylar.map((n) => [n.id, cache[anahtar(metin(n))]])
       .filter(([, v]) => v)));
   };
   if (!eksik.length) return bitir();
-  ollamaJson('/api/embed', { model, input: eksik.map(nodeMetin) }, (err, d) => {
+  ollamaJson('/api/embed', { model, input: eksik.map(metin) }, (err, d) => {
     if (!err && Array.isArray(d.embeddings))
-      eksik.forEach((n, i) => { cache[anahtar(nodeMetin(n))] = d.embeddings[i]; });
+      eksik.forEach((n, i) => { cache[anahtar(metin(n))] = d.embeddings[i]; });
     bitir();
   });
 }
 
 // grafin anlamsal ikizlerini bul, oneri OGESI listesi dondur (kuyruga
 // yazmayi cagiran yapar). Model yoksa bos liste - zarif atlama.
-function semanticSuggest(dataDir, graph, cb) {
+function semanticSuggest(dataDir, graph, readNote, cb) {
   findEmbedModel((model) => {
     if (!model) return cb([]);
+    // kisa-etiket sisme dersi: anlam metni (aciklama+govde) MIN_DESC'ten
+    // kisa dugumler embed edilmez - cirili iki isim 0.96 cikabiliyor
     const adaylar = graph.nodes.filter((n) => !n.ghost
-      && ((n.description || '').trim().length >= MIN_DESC));
+      && nodeMetin(n, readNote).length >= n.label.length + 2 + MIN_DESC);
     if (adaylar.length < 2) return cb([]);
-    vektorler(dataDir, model, adaylar, (vec) => {
+    vektorler(dataDir, model, adaylar, readNote, (vec) => {
       const ids = [...vec.keys()].sort();
       const ciftler = [];
       for (let i = 0; i < ids.length; i++)
@@ -272,12 +283,12 @@ function graphQuery(dataDir, graph, soru, readNote, askOllama, cb) {
   // embedding tohumlari: soru vektorune en yakin 3 not (model yoksa atla)
   findEmbedModel((model) => {
     const adaylar = graph.nodes.filter((n) => !n.ghost
-      && ((n.description || '').trim().length >= MIN_DESC));
+      && nodeMetin(n, readNote).length >= n.label.length + 2 + MIN_DESC);
     if (!model || !adaylar.length) return devam(kelimeTohum);
     ollamaJson('/api/embed', { model, input: [soru] }, (err, d) => {
       const soruVec = !err && Array.isArray(d.embeddings) ? d.embeddings[0] : null;
       if (!soruVec) return devam(kelimeTohum);
-      vektorler(dataDir, model, adaylar, (vec) => {
+      vektorler(dataDir, model, adaylar, readNote, (vec) => {
         const yakin = [...vec.entries()]
           .map(([id, v]) => [kosinus(soruVec, v), id])
           .filter(([sim]) => sim >= TOHUM_ESIK)
