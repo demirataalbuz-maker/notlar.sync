@@ -594,7 +594,9 @@ sugBtn.addEventListener('click', async () => {
 // yazilir ve yol gosterilir.
 (async () => {
   try {
-    const q = params.get('key') ? '?key=' + encodeURIComponent(params.get('key')) : '';
+    // dikkat: `params` bu satirlardan SONRA tanimlaniyor (TDZ) - burada dogrudan oku
+    const p = new URLSearchParams(location.search);
+    const q = p.get('key') ? '?key=' + encodeURIComponent(p.get('key')) : '';
     const m = await fetch('/api/motor' + q).then((r) => r.json());
     if (m && m.var) document.getElementById('expWrap').style.display = '';
   } catch {}
