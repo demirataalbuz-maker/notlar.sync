@@ -98,7 +98,16 @@ function detectCommunities(ids, edges) {
 
 // notes dizinini tarayip {nodes, edges, communities} grafi dondurur.
 // Dugum anahtari normalize isimdir; ayni ada cikan yazim farklari birlesir.
-function buildGraph(notesDir, { hideHidden = false } = {}) {
+// kategori -> harita "top"u (hub) etiketi/emojisi. Bilinmeyen kategori kendi adiyla gecer.
+const KATEGORI_TOP = {
+  'açık':  '🔴 Açıklar',
+  'proje': '🧪 Projeler',
+  'silah': '🔫 Silahlar',
+  'osint': '🕵️ OSINT Araçları',
+  'araç':  '🛠️ Araçlar',
+};
+
+function buildGraph(notesDir, { hideHidden = false, kategoriHub = false, sadeceKategori = false } = {}) {
   let files = [];
   try {
     files = fs.readdirSync(notesDir).filter((f) => f.endsWith('.md')).sort();
@@ -119,6 +128,7 @@ function buildGraph(notesDir, { hideHidden = false } = {}) {
       id, label, type: meta.type || 'not',
       description: meta.description || firstLine(body),
       file: f, ghost: false,
+      kategori: meta.kategori || null, // frontmatter 'kategori:' -> gruplu gorunum icin
     });
     for (const link of collectLinks(body)) rawEdges.push([id, link]);
   }
@@ -173,6 +183,56 @@ function buildGraph(notesDir, { hideHidden = false } = {}) {
     const rep = ns.slice().sort((a, b) => b.degree - a.degree || a.label.localeCompare(b.label, 'tr'))[0];
     return { id, name: rep.label + ' çevresi', size: ns.length };
   });
+
+  // GRUPLU GÖRÜNÜM: kategorili notlar tek "top"a KATLANIR (haritada ayrı görünmez);
+  // ekranda sadece 5 büyük top + kategorisiz (kişisel) notlar kalır → tertemiz.
+  // Her top, üyelerini `members` içinde taşır; hub'a tıklayınca panel içini listeler.
+  // Kenarlar yeniden yönlendirilir: bir notun kategorili komşusu -> onun topuna gider,
+  // aynı kategori-içi bağlar atılır, kategoriler arası bağlar top-top olarak toplanır.
+  if (kategoriHub) {
+    const hubId = (k) => 'kat::' + normName(k);
+    const katOf = new Map();   // noteId -> kategori
+    const uyeler = new Map();  // kategori -> [{label,file,type}]
+    for (const n of nodeList) {
+      if (n.ghost || !n.kategori) continue;
+      katOf.set(n.id, n.kategori);
+      if (!uyeler.has(n.kategori)) uyeler.set(n.kategori, []);
+      uyeler.get(n.kategori).push({ label: n.label, file: n.file, type: n.type });
+    }
+
+    // sadeceKategori (açılış evreni): kategorisiz/meta/hayalet notlar HİÇ gösterilmez —
+    // sadece konu güneş sistemleri (hub + gezegenler). Aksi halde kategorisizler de kalır.
+    const yeni = sadeceKategori ? [] : nodeList.filter((n) => !katOf.has(n.id));
+    let hc = -1;
+    for (const [kat, uye] of uyeler) {
+      yeni.push({
+        id: hubId(kat), label: KATEGORI_TOP[kat] || kat, type: 'kategori',
+        description: uye.length + ' not · kategori topu (tıkla → içindekiler)',
+        file: null, ghost: false, kategori: kat, hub: true, members: uye,
+        degree: 0, community: hc--,
+      });
+    }
+
+    const idSet = new Set(yeni.map((n) => n.id));
+    const remap = (id) => (katOf.has(id) ? hubId(katOf.get(id)) : id);
+    const es = new Map();
+    for (const e of edges) {
+      const a = remap(e.source), b = remap(e.target);
+      if (a === b || !idSet.has(a) || !idSet.has(b)) continue; // aynı kategori içi / düşen düğüm
+      const k = a + '\0' + b;
+      if (!es.has(k)) es.set(k, { source: a, target: b, relation: e.relation || null, count: 1 });
+      else es.get(k).count++;
+    }
+    const yeniEdges = [...es.values()];
+
+    const deg = new Map(yeni.map((n) => [n.id, 0]));
+    for (const e of yeniEdges) { deg.set(e.source, (deg.get(e.source) || 0) + 1); deg.set(e.target, (deg.get(e.target) || 0) + 1); }
+    for (const n of yeni) {
+      n.degree = deg.get(n.id) || 0;
+      if (n.hub) n.degree = Math.max(n.degree, n.members.length); // top büyük görünsün
+    }
+    return { nodes: yeni, edges: yeniEdges, communities, saglik: { ozdongu, cift } };
+  }
 
   return { nodes: nodeList, edges, communities, saglik: { ozdongu, cift } };
 }

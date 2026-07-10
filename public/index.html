@@ -286,8 +286,12 @@
   <!-- ZIHIN HARITASI (tam ekran) -->
   <div id="mapOverlay">
     <div id="mapBar">
-      <strong>🕸️ Zihin Haritası</strong>
-      <button id="mapClose">✕ Kapat</button>
+      <strong>🌌 bilgi haritan</strong>
+      <span style="flex:1"></span>
+      <button id="evrenBtn" title="Evren modu — konu güneş sistemleri, notlar gezegen (canlı)">🌌 Evren</button>
+      <button id="graphifyBtn" title="Graphify görünümü — kod/bilgi grafiği, topluluk filtresi + arama (graphify motoru)">🧬 Graphify</button>
+      <button id="graphifyRebuild" title="Graphify grafiğini yeniden kur (güncel koddan)">↻</button>
+      <button id="mapClose">✕ notlara geç</button>
     </div>
     <iframe id="mapFrame" title="Zihin Haritası"></iframe>
   </div>
@@ -471,6 +475,7 @@ function connect() {
       // acik not baska cihazda silindiyse hayalet olarak kalmasin
       if (current && !notes.includes(current)) closeNote();
       renderList();
+      acilisEvreni(); // uygulama açılışında ilk ekran = evren (oturumda bir kez)
       if (current) blTimerKur(); // yeni/silinen not backlinkleri degistirmis olabilir
     }
     // baska bir notta yapilan degisiklik bu nota [[link]] eklemis olabilir
@@ -693,6 +698,16 @@ $('mapBtn').onclick = () => {
   $('mapFrame').src = 'harita.html';
   $('mapOverlay').classList.add('open');
 };
+// AÇILIŞ EVRENİ: uygulama ilk açıldığında not listesi yerine EVREN gelir
+// (?landing=1 → evren modu + sade: yalnız konu güneş sistemleri, meta/sistem notları yok).
+// "✕ notlara geç" ile kapatılır. Oturumda bir kez.
+let acilisEvreniGosterildi = false;
+function acilisEvreni() {
+  if (acilisEvreniGosterildi) return;
+  acilisEvreniGosterildi = true;
+  $('mapFrame').src = 'harita.html?landing=1';
+  $('mapOverlay').classList.add('open');
+}
 window.addEventListener('message', (ev) => {
   if (ev.origin !== location.origin || !ev.data || ev.data.type !== 'harita-hazir') return;
   const fr = $('mapFrame');
@@ -701,6 +716,23 @@ window.addEventListener('message', (ev) => {
 $('mapClose').onclick = () => {
   $('mapOverlay').classList.remove('open');
   $('mapFrame').src = 'about:blank'; // simulasyonu durdur, bellek bosalt
+};
+// --- EVREN <-> GRAPHIFY mod geçişi (graphify canlı uygulamaya gömülü) ---
+$('evrenBtn').onclick = () => { $('mapFrame').src = 'harita.html?landing=1'; };
+$('graphifyBtn').onclick = () => {
+  // /graphify statik graph.html; postMessage alamaz, parola varsa key ile geçilir
+  $('mapFrame').src = '/graphify' + (key ? '?key=' + encodeURIComponent(key) : '');
+};
+$('graphifyRebuild').onclick = async () => {
+  const b = $('graphifyRebuild');
+  b.textContent = '⏳'; b.disabled = true;
+  try {
+    const r = await fetch('/api/graphify/build' + (key ? '?key=' + encodeURIComponent(key) : ''), { method: 'POST' });
+    if (!r.ok) throw new Error(await r.text());
+    // grafiği yeni kurulan haliyle tazele (graphify görünümündeyse)
+    $('graphifyBtn').onclick();
+  } catch (e) { alert('graphify kurulamadı: ' + e.message); }
+  b.textContent = '↻'; b.disabled = false;
 };
 
 // --- ŞİFRE KASASI ---

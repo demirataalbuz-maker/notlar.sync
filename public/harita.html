@@ -125,6 +125,7 @@
   <div id="topbar">
     <div class="brand mono"><strong>🕸️ Zihin Haritası</strong>notlar arası bağlantılar</div>
     <div style="display:flex;gap:10px;align-items:flex-start">
+      <button id="grupBtn" title="🌌 Evren modu (insan): kategoriler parlayan güneş, notlar yörüngedeki gezegen. Uzaktan galaksi; yaklaş (zoom) → gezegenler belirir. Güneşe tıkla → içindekiler panelde. Kapalı = 🕸️ ağ modu (ham graf, AI'nın okuduğu).">🌌 evren</button>
       <button id="rprBtn" title="Zihin raporu: sağlık, öbek bütünlüğü, şaşırtıcı bağlantılar, sorulmaya değer sorular">📊 rapor</button>
       <button id="sugBtn" title="Local AI (Ollama) içerikten bağlantı ÖNERİR — öneriler kuyrukta bekler, sen kabul etmeden nota yazılmaz; reddedilen bir daha önerilmez">🤖 öneri</button>
       <div id="expWrap" style="position:relative;display:none">
@@ -169,10 +170,11 @@ const keyQ = () => KEY ? '?key=' + encodeURIComponent(KEY) : '';
 let DATA = { nodes: [], edges: [] };
 const COLORS = {
   user: '#5ec8c0', feedback: '#ef7fb1', project: '#e0b34d',
-  reference: '#7fd88f', not: '#a78bfa', ghost: '#6b6480'
+  reference: '#7fd88f', not: '#a78bfa', ghost: '#6b6480',
+  kategori: '#f0a020' // gruplu gorunumdeki "top" (kategori hub'i)
 };
 const TYPE_LABELS = { user: 'kullanıcı', feedback: 'geri bildirim', project: 'proje',
-  reference: 'referans', not: 'not', ghost: 'eksik / hayalet' };
+  reference: 'referans', not: 'not', ghost: 'eksik / hayalet', kategori: '🫧 kategori topu' };
 
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
@@ -274,7 +276,38 @@ let hoverNode = null, selectedNode = null;
 let searchTerm = '';
 const hiddenTypes = new Set();
 
-function radius(n) { return Math.max(5, Math.min(22, 6 + n.degree * 1.7)); }
+function radius(n) {
+  if (n.hub) return Math.max(24, Math.min(48, 14 + Math.sqrt(n.degree) * 5)); // kategori topu: büyük
+  return Math.max(5, Math.min(22, 6 + n.degree * 1.7));
+}
+
+// --- EVREN MODU: güneş (kategori topu) etrafına gezegenleri (üye notlar) yörüngeye diz ---
+const PLANET_ZOOM = 0.8; // bu yakınlıktan sonra gezegenler görünür (anlamsal zoom)
+let planetHits = [];     // {x,y,r,member,sun} dünya koordinatı - tıklama/hover icin
+let hoverPlanet = null;
+function planetRings(sun) {
+  const rings = []; const sunR = radius(sun); let idx = 0, ring = 1;
+  while (idx < sun.members.length) { rings.push(sunR + 24 + ring * 22); idx += 6 * ring; ring++; }
+  return rings;
+}
+function planetLayout(sun) {
+  const out = []; const M = sun.members.length; const sunR = radius(sun);
+  let idx = 0, ring = 1;
+  while (idx < M) {
+    const cap = 6 * ring, rr = sunR + 24 + ring * 22, count = Math.min(cap, M - idx);
+    for (let k = 0; k < count; k++) {
+      const ang = (k / count) * Math.PI * 2 + ring * 0.7;
+      out.push({ x: sun.x + Math.cos(ang) * rr, y: sun.y + Math.sin(ang) * rr, r: 5, member: sun.members[idx++], sun });
+    }
+    ring++;
+  }
+  return out;
+}
+function planetAt(px, py) {
+  const [wx, wy] = screenToWorld(px, py);
+  for (const p of planetHits) if (Math.hypot(p.x - wx, p.y - wy) < p.r + 4) return p;
+  return null;
+}
 
 // yerlesim oturunca simulasyon duraklar (tiklamak kolaylassin);
 // dugum suruklenince tekrar isinir. Kuvvetler zayiflatilmaz - sadece
@@ -384,6 +417,40 @@ function draw() {
   }
   ctx.setLineDash([]);
 
+  // EVREN MODU: güneş parıltısı + yörünge halkaları + gezegenler (anlamsal zoom)
+  planetHits = [];
+  if (gruplu) {
+    const gezegenGoster = zoom >= PLANET_ZOOM;
+    for (const n of nodes) {
+      if (!n.hub) continue;
+      const R = radius(n);
+      // güneş parıltısı (radial glow)
+      const g = ctx.createRadialGradient(n.x, n.y, R * 0.3, n.x, n.y, R * 3.2);
+      g.addColorStop(0, (COLORS.kategori) + '66');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(n.x, n.y, R * 3.2, 0, Math.PI * 2); ctx.fill();
+      if (gezegenGoster && n.members) {
+        ctx.strokeStyle = '#ffffff14'; ctx.lineWidth = 1 / zoom;
+        for (const rr of planetRings(n)) { ctx.beginPath(); ctx.arc(n.x, n.y, rr, 0, Math.PI * 2); ctx.stroke(); }
+        const alpha = Math.min(1, (zoom - PLANET_ZOOM) / 0.35);
+        for (const p of planetLayout(n)) {
+          planetHits.push(p);
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = COLORS[p.member.type] || COLORS.not;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+          if (p === hoverPlanet) {
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 / zoom; ctx.stroke();
+            ctx.fillStyle = '#ece8f5'; ctx.font = `${11 / zoom}px -apple-system, system-ui, sans-serif`;
+            ctx.textBaseline = 'middle';
+            ctx.fillText(p.member.label, p.x + p.r + 4 / zoom, p.y);
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
   for (const n of nodes) {
     const r = radius(n);
     const faded = dim(n);
@@ -431,6 +498,7 @@ requestAnimationFrame(frame);
 
 // --- etkilesim ---
 let dragNode = null, panning = false, panStart = null, camStart = null, moved = false;
+let pendingPlanet = null; // evren modu: gezegene tıklandıysa mouseup'ta notu açar
 
 function nodeAt(px, py) {
   const [wx, wy] = screenToWorld(px, py);
@@ -447,6 +515,8 @@ cv.addEventListener('mousedown', (e) => {
   const px = e.clientX - rect.left, py = e.clientY - rect.top;
   const n = nodeAt(px, py);
   moved = false;
+  // evren modu: boş alana değil bir gezegene tıklandıysa (yakınken) mouseup'ta aç
+  pendingPlanet = (!n && gruplu && zoom >= PLANET_ZOOM) ? planetAt(px, py) : null;
   // shift+tik: yol secimi (1. dugum isaretlenir, 2. dugumde yol vurgulanir)
   if (n && e.shiftKey) {
     if (!pathPick) { pathPick = n; pathIds = []; }
@@ -470,11 +540,16 @@ window.addEventListener('mousemove', (e) => {
     camY = camStart[1] + (py - panStart[1]) / zoom;
   } else {
     hoverNode = nodeAt(px, py);
-    cv.style.cursor = hoverNode ? 'pointer' : 'grab';
+    hoverPlanet = (!hoverNode && gruplu && zoom >= PLANET_ZOOM) ? planetAt(px, py) : null;
+    cv.style.cursor = (hoverNode || hoverPlanet) ? 'pointer' : 'grab';
   }
 });
 window.addEventListener('mouseup', (e) => {
   if (dragNode && !moved) selectNode(dragNode);
+  // evren modu: gezegene tık (sürüklemeden) → notu yeni sekmede aç
+  if (pendingPlanet && !moved && pendingPlanet.member.file)
+    window.open('/api/note/' + encodeURIComponent(pendingPlanet.member.label) + keyQ(), '_blank');
+  pendingPlanet = null;
   if (dragNode) dragNode.fixed = false;
   dragNode = null; panning = false;
   cv.classList.remove('dragging');
@@ -508,6 +583,21 @@ function selectNode(n) {
   document.getElementById('pFile').textContent =
     (n.file ? n.file : '(henüz yazılmamış)') + '  ·  ' + (comm ? comm.name : 'öbek #' + n.community);
   document.getElementById('pDesc').textContent = n.description || '(açıklama yok)';
+  // GRUPLU: kategori topuna tıklandıysa panel "içindekiler"i listeler (tıkla → notu aç)
+  if (n.hub && n.members) {
+    document.getElementById('pConnTitle').textContent = `içindekiler (${n.members.length})`;
+    const box = document.getElementById('pConns');
+    box.innerHTML = '';
+    n.members.slice().sort((a, b) => a.label.localeCompare(b.label, 'tr')).forEach(m => {
+      const b = document.createElement('button');
+      b.className = 'conn';
+      b.textContent = '📄 ' + m.label;
+      b.title = 'notu aç';
+      b.onclick = () => { if (m.file) window.open('/api/note/' + encodeURIComponent(m.label) + keyQ(), '_blank'); };
+      box.appendChild(b);
+    });
+    return;
+  }
   const oneriler = sugFor(n);
   document.getElementById('pConnTitle').textContent =
     `bağlantılar (${n.conns.length}${oneriler.length ? ' + ' + oneriler.length + ' öneri' : ''})`;
@@ -731,10 +821,28 @@ showAI.addEventListener('change', () => {
   localStorage.setItem('haritaAI', showAI.checked ? '1' : '0');
   refresh();
 });
+
+// AÇILIŞ EVRENİ: index.html uygulama açılışında harita.html?landing=1 yükler →
+// evren modu ZORLA açık + sade (yalnız konu güneş sistemleri, meta/sistem notları yok).
+const landing = params.get('landing') === '1';
+// GRUPLU GÖRÜNÜM: her kategori tek büyük "top" olur; tercih localStorage'da kalır
+let gruplu = landing || params.get('gruplu') === '1' || localStorage.getItem('haritaGruplu') === '1';
+const grupBtn = document.getElementById('grupBtn');
+function grupBtnGorunum() { grupBtn.style.color = gruplu ? 'var(--text)' : ''; grupBtn.style.fontWeight = gruplu ? '700' : ''; }
+grupBtn.addEventListener('click', () => {
+  gruplu = !gruplu;
+  localStorage.setItem('haritaGruplu', gruplu ? '1' : '0');
+  grupBtnGorunum();
+  autoFit = true; // gruplu/normal gecisinde ekrana yeniden sigdir
+  refresh();
+});
+grupBtnGorunum();
 function graphUrl() {
   const q = new URLSearchParams();
   if (KEY) q.set('key', KEY);
   if (showAI.checked) q.set('gizli', '1');
+  if (gruplu) q.set('gruplu', '1');
+  if (landing) q.set('sade', '1'); // açılış evreni: meta/sistem notlarını gizle
   return '/api/graph' + (q.toString() ? '?' + q : '');
 }
 let reloadTimer = null;

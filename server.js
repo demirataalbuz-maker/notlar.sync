@@ -138,13 +138,14 @@ function notesFingerprint() {
       .join('|');
   } catch { return null; }
 }
-function getGraph(hideHidden) {
+function getGraph(hideHidden, kategoriHub = false, sadeceKategori = false) {
   const fp = notesFingerprint();
-  const c = gCache.get(hideHidden);
+  const key = hideHidden + ':' + kategoriHub + ':' + sadeceKategori; // her gorunum ayri onbellek
+  const c = gCache.get(key);
   if (c && fp !== null && c.fp === fp) return c.graph;
   if (fp === null && c) return c.graph; // okuma hatasi: son saglam graf korunur
-  const g = buildGraph(NOTES_DIR, { hideHidden });
-  if (fp !== null) gCache.set(hideHidden, { fp, graph: g });
+  const g = buildGraph(NOTES_DIR, { hideHidden, kategoriHub, sadeceKategori });
+  if (fp !== null) gCache.set(key, { fp, graph: g });
   return g;
 }
 
@@ -372,6 +373,19 @@ function handleApi(req, res, url) {
     return;
   }
 
+  // GRAPHIFY entegrasyonu: uygulama içinden kod grafiğini yeniden kur (LLM'siz, hızlı).
+  // update = kod yeniden çıkar, cluster-only --no-label = toplulukları+graph.html tazele.
+  if (url.pathname === '/api/graphify/build' && req.method === 'POST') {
+    const bin = path.join(require('os').homedir(), '.local/bin/graphify');
+    execFile(bin, ['update', __dirname, '--no-cluster'], { timeout: 120000 }, () => {
+      execFile(bin, ['cluster-only', __dirname, '--no-label'], { timeout: 120000 }, (e2, o2, er2) => {
+        if (e2) return txt(500, JSON.stringify({ ok: false, hata: String(er2 || e2).slice(0, 300) }), 'application/json');
+        txt(200, JSON.stringify({ ok: true }), 'application/json');
+      });
+    });
+    return;
+  }
+
   if (url.pathname === '/api/notes' && req.method === 'GET')
     return txt(200, JSON.stringify(listNotes()), 'application/json');
 
@@ -483,7 +497,10 @@ function handleApi(req, res, url) {
 
   // --- zihin haritasi: notlar arasi [[link]] grafi (AI de insan da okuyabilir) ---
   if (url.pathname.startsWith('/api/graph') && req.method === 'GET') {
-    const g = getGraph(url.searchParams.get('gizli') !== '1');
+    // gruplu gorunum SADECE ana harita cekiminde: rapor/oneri/query hub'siz kalir
+    const gruplu = url.pathname === '/api/graph' && url.searchParams.get('gruplu') === '1';
+    const sade = gruplu && url.searchParams.get('sade') === '1'; // acilis evreni: sadece konu sistemleri
+    const g = getGraph(url.searchParams.get('gizli') !== '1', gruplu, sade);
 
     if (url.pathname === '/api/graph')
       return txt(200, JSON.stringify(g), 'application/json');
@@ -798,6 +815,26 @@ const server = http.createServer((req, res) => {
       if (err) { res.writeHead(404); res.end('yok'); return; }
       const types = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
       res.writeHead(200, { 'Content-Type': types[path.extname(fp)] || 'application/octet-stream' });
+      res.end(data);
+    });
+  }
+  // GRAPHIFY görünümü: kendine yeten graph.html'i uygulama içine gömmek için sun (auth'lu)
+  if (url.pathname === '/graphify' || url.pathname === '/graphify/') {
+    if (!authOk(keyOf(req, url))) { res.writeHead(401); res.end('parola'); return; }
+    const fp = path.join(__dirname, 'graphify-out', 'graph.html');
+    return fs.readFile(fp, (err, data) => {
+      if (err) { res.writeHead(404); res.end('graphify-out/graph.html yok'); return; }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(data);
+    });
+  }
+  // AI RED TEAM PANOSU: radarın ürettiği özel panoyu uygulama içinde sun (auth'lu, local).
+  if (url.pathname === '/pano' || url.pathname === '/pano/') {
+    if (!authOk(keyOf(req, url))) { res.writeHead(401); res.end('parola'); return; }
+    const fp = path.join(require('os').homedir(), 'ai-redteam-radar', 'site', 'index.html');
+    return fs.readFile(fp, (err, data) => {
+      if (err) { res.writeHead(404); res.end('pano henüz üretilmedi (radar bir tur dönünce oluşur)'); return; }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(data);
     });
   }
