@@ -5,6 +5,7 @@
   "password": "degistir-beni",
   "gitAutoPush": false,
   "cevapModeli": "qwen3:8b",
+  "avciUrl": "http://127.0.0.1:7788/",
   "claudeApiKey": "",
   "claudeModel": "claude-sonnet-5"
 }

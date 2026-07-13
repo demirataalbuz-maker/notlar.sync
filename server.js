@@ -14,6 +14,7 @@ const installer = require('./installer');
 const obsidian = require('./obsidian');
 const memory = require('./memory');
 const integrations = require('./integrations');
+const peerSync = require('./peer-sync');
 const APP_VERSION = require('./package.json').version;
 
 // veriler kullanicinin ev dizininde: paketli uygulamada __dirname salt-okunur (asar)
@@ -27,6 +28,7 @@ for (const dir of [DATA_DIR, NOTES_DIR, TRASH_DIR]) {
 }
 const memoryStore = memory.createStore(DATA_DIR);
 const integrationManager = integrations.createManager(DATA_DIR, __dirname);
+let replicaSync = null;
 
 // Not/kasa/config yazmalari once ayni dizinde gecici dosyaya, sonra rename ile
 // hedefe gider. Uygulama ya da makine yazma aninda kapanirsa yarim dosya kalmaz.
@@ -122,6 +124,41 @@ function configKaydet(next) {
   config = next;
   PASSWORD = config.password ?? '';
   CEVAP_MODELI = config.cevapModeli || 'qwen3:8b';
+}
+
+function normalizeAvciUrl(value) {
+  const target = new URL(String(value || 'http://127.0.0.1:7788/'));
+  const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname.toLowerCase());
+  if (!['http:', 'https:'].includes(target.protocol) || !loopback || target.username || target.password || target.hash)
+    throw new Error('Saldiri Avcisi adresi yalniz yerel http/https adresi olabilir');
+  return target.href;
+}
+
+function configuredAvciUrl() {
+  return normalizeAvciUrl(process.env.NOTLAR_AVCI_URL || config.avciUrl || 'http://127.0.0.1:7788/');
+}
+
+async function avciStatus() {
+  let target;
+  try { target = new URL(configuredAvciUrl()); }
+  catch (error) { return { online: false, url: '', reason: String(error.message || error), checkedAt: Date.now() }; }
+  const targetPort = Number(target.port || (target.protocol === 'https:' ? 443 : 80));
+  if (targetPort === PORT && ['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname.toLowerCase())) {
+    return { online: false, url: target.href, reason: `Port ${PORT} Notlar Sync tarafindan kullaniliyor`, checkedAt: Date.now() };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1500);
+  try {
+    const response = await fetch(target, { method: 'GET', redirect: 'manual', signal: controller.signal });
+    try { await response.body?.cancel(); } catch {}
+    if (response.status >= 500) {
+      return { online: false, url: target.href, status: response.status, reason: `Servis HTTP ${response.status} dondurdu`, checkedAt: Date.now() };
+    }
+    return { online: true, url: target.href, status: response.status, checkedAt: Date.now() };
+  } catch (error) {
+    const reason = error?.name === 'AbortError' ? 'Servis zamaninda yanit vermedi' : 'Yerel servis calismiyor veya erisilemiyor';
+    return { online: false, url: target.href, reason, checkedAt: Date.now() };
+  } finally { clearTimeout(timeout); }
 }
 
 // --- yardimcilar ---
@@ -224,6 +261,15 @@ const icerikHash = (s) => {
   for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
   return h.toString(36);
 };
+function replicaTrack(name, deleted = false) {
+  if (!replicaSync) return;
+  try {
+    if (deleted) replicaSync.noteDeleted(name);
+    else replicaSync.noteChanged(name);
+  } catch (error) {
+    console.log('peer sync kaydi yapilamadi:', String(error.message || error).slice(0, 180));
+  }
+}
 
 // tarayici eklentisinin yakaladigi sifreler — SADECE RAM, diske/git'e asla yazilmaz
 let pending = [];
@@ -247,9 +293,22 @@ function saveNote(name, content) {
   latest[name] = content;
   atomikYaz(notePath(name), content);
   markInternalFs(name);
+  replicaTrack(name);
   autoPush();
   fireWebhook('not-kaydedildi', name);
   otoZihin(name); // arka plan zekasi: sessizlik sonrasi oneri taramasi
+}
+
+function flushPendingSaves() {
+  for (const name of Object.keys(saveTimers)) {
+    if (latest[name] === undefined) continue;
+    clearTimeout(saveTimers[name]);
+    delete saveTimers[name];
+    const wasNew = pendingCreates.delete(name);
+    saveNote(name, latest[name]);
+    broadcast({ type: 'saved', name, hash: icerikHash(latest[name]) });
+    if (wasNew) broadcast({ type: 'list', notes: listNotes(), folders: listFolders() });
+  }
 }
 
 const TRASH_INDEX = path.join(TRASH_DIR, 'index.json');
@@ -279,6 +338,7 @@ function deleteNote(name) {
   }
   trashYaz(list.slice(0, 1000));
   markInternalFs(name, true);
+  replicaTrack(name, true);
   autoPush();
   fireWebhook('not-silindi', name);
   return true;
@@ -309,6 +369,7 @@ function trashGeriYukle(id) {
   list.splice(i, 1);
   trashYaz(list);
   markInternalFs(name);
+  replicaTrack(name);
   autoPush();
   fireWebhook('not-geri-yuklendi', name);
   return name;
@@ -340,6 +401,8 @@ function renameNote(oldName, newName) {
   delete latest[oldName];
   markInternalFs(oldName, true);
   markInternalFs(clean);
+  replicaTrack(oldName, true);
+  replicaTrack(clean);
   const changed = [];
   let linksUpdated = 0;
   const oldNorm = normName(oldName);
@@ -412,6 +475,8 @@ function renameFolder(oldValue, newValue) {
     }
     markInternalFs(oldNote, true);
     markInternalFs(next);
+    replicaTrack(oldNote, true);
+    replicaTrack(next);
     moved.push({ from: oldNote, to: next });
   }
   if (Array.isArray(config.pinnedNotes)) {
@@ -819,15 +884,30 @@ function readBody(req, cb) {
 // AI URETMEZ bir sey; kullanicinin GIRIS YAPMIS CLI'lari birbiriyle konusur.
 // Her cagride tum transcript prompt'a gomulur (CLI'lar hafizasiz) -> oturum-ici hatirlama.
 // PATH'i genislet: codex node'un bin dizininde (process.execPath yani), claude ~/.local/bin'de.
-const KONSEY_ENV = {
-  ...process.env,
-  PATH: [
-    path.dirname(process.execPath),
-    path.join(require('os').homedir(), '.local/bin'),
-    path.join(require('os').homedir(), '.npm-global/bin'),
-    process.env.PATH || '',
-  ].join(':'),
+const KONSEY_ENV = {};
+for (const key of [
+  'HOME', 'USER', 'LOGNAME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA',
+  'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TMP', 'TEMP', 'TMPDIR',
+  'LANG', 'LC_ALL', 'TZ', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR',
+  'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
+  'SSL_CERT_FILE', 'SSL_CERT_DIR',
+]) if (process.env[key]) KONSEY_ENV[key] = process.env[key];
+KONSEY_ENV.PATH = [
+  path.dirname(process.execPath),
+  path.join(require('os').homedir(), '.local/bin'),
+  path.join(require('os').homedir(), '.npm-global/bin'),
+  process.env.PATH || '',
+].join(path.delimiter);
+KONSEY_ENV.NO_COLOR = '1';
+const KONSEY_MAX_MESSAGE = 20000;
+const KONSEY_MAX_TRANSCRIPT = 100000;
+const KONSEY_MAX_OUTPUT = 1024 * 1024;
+const KONSEY_TIMEOUT_MS = 120000;
+const KONSEY_MODELS = {
+  Claude: new Set(['opus', 'sonnet', 'haiku', 'fable']),
+  Codex: new Set(['gpt-5.5', 'gpt-5-codex', 'o3']),
 };
+let konseyActive = 0;
 function konseyPrompt(isim, soru, transcript) {
   return (
     `Sen '${isim}' adli bir yapay zekasin ve bir kanalda bir insan ile baska bir yapay zeka ` +
@@ -838,41 +918,75 @@ function konseyPrompt(isim, soru, transcript) {
   );
 }
 // spawn + stdin KAPALI (stdio 'ignore'): CLI'lar TTY/stdin beklemesin -> yoksa takilir.
-function cliCalistir(cmd, args, cb) {
-  let out = '', err = '', bitti = false;
-  const done = (e) => { if (bitti) return; bitti = true; clearTimeout(t); cb(e, out, err); };
+// Her ajan bos, 0700 bir gecici klasorde ve sinirli cikti/zaman kotasiyla calisir.
+function cliCalistir(cmd, argsOrFactory, cb) {
+  let out = '', err = '', outBytes = 0, errBytes = 0, bitti = false, timer = null;
+  const cwd = fs.mkdtempSync(path.join(require('os').tmpdir(), 'notlar-konsey-'));
+  try { fs.chmodSync(cwd, 0o700); } catch {}
+  const temizle = () => { try { fs.rmSync(cwd, { recursive: true, force: true }); } catch {} };
+  const done = (error) => {
+    if (bitti) return;
+    bitti = true;
+    if (timer) clearTimeout(timer);
+    try { cb(error, out, err, cwd); } finally { temizle(); }
+  };
+  let args;
+  try { args = typeof argsOrFactory === 'function' ? argsOrFactory(cwd) : argsOrFactory; }
+  catch (error) { temizle(); return cb(error, '', '', cwd); }
   let child;
   try {
-    child = spawn(cmd, args, { env: KONSEY_ENV, stdio: ['ignore', 'pipe', 'pipe'] });
-  } catch (e) { return cb(e, '', ''); }
-  const t = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* yok */ } done(new Error('zaman asimi (600s)')); }, 600000);
-  child.stdout.on('data', (d) => { out += d; });
-  child.stderr.on('data', (d) => { err += d; });
-  child.on('error', (e) => done(e));
-  child.on('close', () => done(null));
+    child = spawn(cmd, args, { cwd, env: KONSEY_ENV, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  } catch (error) { temizle(); return cb(error, '', '', cwd); }
+  const append = (kind, data) => {
+    if (bitti) return;
+    const buffer = Buffer.from(data);
+    const used = kind === 'stdout' ? outBytes : errBytes;
+    const remaining = Math.max(0, KONSEY_MAX_OUTPUT - used);
+    const text = buffer.subarray(0, remaining).toString('utf8');
+    if (kind === 'stdout') { out += text; outBytes += buffer.length; }
+    else { err += text; errBytes += buffer.length; }
+    if (outBytes > KONSEY_MAX_OUTPUT || errBytes > KONSEY_MAX_OUTPUT) {
+      try { child.kill('SIGKILL'); } catch {}
+      done(new Error('ajan cikti sinirini asti'));
+    }
+  };
+  timer = setTimeout(() => {
+    try { child.kill('SIGKILL'); } catch {}
+    done(new Error('zaman asimi (120s)'));
+  }, KONSEY_TIMEOUT_MS);
+  child.stdout.on('data', (data) => append('stdout', data));
+  child.stderr.on('data', (data) => append('stderr', data));
+  child.on('error', (error) => done(error));
+  child.on('close', (code, signal) => {
+    if (code === 0) return done(null);
+    done(new Error(`ajan islemi basarisiz (${signal || `kod ${code}`})`));
+  });
 }
 // model bos/"varsayilan" ise bayrak eklenmez -> CLI kendi config default'unu kullanir.
-function temizModel(m) {
-  m = String(m || '').trim();
-  return (m && m.toLowerCase() !== 'varsayilan' && /^[\w.:-]+$/.test(m)) ? m : '';
+function temizModel(value, provider) {
+  const model = String(value || '').trim();
+  if (!model || model.toLowerCase() === 'varsayilan') return '';
+  if (!KONSEY_MODELS[provider]?.has(model)) throw new Error(`${provider} modeli desteklenmiyor`);
+  return model;
 }
 function claudeCalistir(prompt, model, cb) {
-  const m = temizModel(model);
-  const args = m ? ['--model', m, '-p', prompt] : ['-p', prompt];
-  cliCalistir('claude', args, (err, out, serr) => {
-    if (err && !out) return cb(`(claude cevap veremedi: ${String(serr || err.message).slice(0, 200)})`);
+  const m = temizModel(model, 'Claude');
+  const args = ['--safe-mode', '--no-session-persistence', '--no-chrome', '--tools', '', ...(m ? ['--model', m] : []), '-p', prompt];
+  cliCalistir(process.env.NOTLAR_CLAUDE_BIN || 'claude', args, (err, out, serr) => {
+    if (err) return cb(`(claude cevap veremedi: ${String(serr || err.message).slice(0, 200)})`);
     cb(String(out || '').trim() || '(claude bos yanit dondurdu)');
   });
 }
 function codexCalistir(prompt, model, cb) {
-  const m = temizModel(model);
-  const tmp = path.join(require('os').tmpdir(), `konsey-${Date.now()}-${Math.floor(Math.random() * 1e9)}.txt`);
-  const args = m ? ['exec', '-m', m, '--output-last-message', tmp, prompt] : ['exec', '--output-last-message', tmp, prompt];
-  cliCalistir('codex', args, (err, out, serr) => {
+  const m = temizModel(model, 'Codex');
+  let outputFile = '';
+  cliCalistir(process.env.NOTLAR_CODEX_BIN || 'codex', (cwd) => {
+    outputFile = path.join(cwd, 'son-yanit.txt');
+    return ['exec', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--disable', 'shell_tool', '--sandbox', 'read-only', '--skip-git-repo-check', ...(m ? ['-m', m] : []), '--output-last-message', outputFile, prompt];
+  }, (err, out, serr) => {
     let ans = '';
-    try { ans = fs.readFileSync(tmp, 'utf8').trim(); } catch { /* yok */ }
-    try { fs.unlinkSync(tmp); } catch { /* yok */ }
-    if (!ans && err) return cb(`(codex cevap veremedi: ${String(serr || err.message).slice(0, 200)})`);
+    try { ans = fs.readFileSync(outputFile, 'utf8').slice(0, KONSEY_MAX_OUTPUT).trim(); } catch { /* yok */ }
+    if (err) return cb(`(codex cevap veremedi: ${String(serr || err.message).slice(0, 200)})`);
     cb(ans || String(out || '').trim() || '(codex bos yanit dondurdu)');
   });
 }
@@ -883,10 +997,30 @@ function getHostAddress(cb) {
     const ip = (out || '').trim().split('\n')[0];
     if (ip) return cb(ip);
     const nets = require('os').networkInterfaces();
-    for (const name of Object.keys(nets))
-      for (const net of nets[name])
-        if (net.family === 'IPv4' && !net.internal) return cb(net.address);
-    cb('localhost');
+    const candidates = [];
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] || []) {
+        if (!['IPv4', 4].includes(net.family) || net.internal || /^169\.254\./.test(net.address)) continue;
+        const virtual = /docker|veth|br-|virbr|vmnet|virtualbox|wsl/i.test(name) ? 20 : 0;
+        const range = /^192\.168\./.test(net.address) ? 0
+          : /^10\./.test(net.address) ? 1
+            : /^172\.(1[6-9]|2\d|3[01])\./.test(net.address) ? 2 : 5;
+        candidates.push({ address: net.address, score: virtual + range });
+      }
+    }
+    candidates.sort((a, b) => a.score - b.score || a.address.localeCompare(b.address));
+    cb(candidates[0]?.address || 'localhost');
+  });
+}
+
+function getAdvertisedUrl(cb) {
+  if (process.env.NOTLAR_ADVERTISE_URL) {
+    try { return cb(null, peerSync.normalizeUrl(process.env.NOTLAR_ADVERTISE_URL)); }
+    catch (error) { return cb(error); }
+  }
+  getHostAddress((address) => {
+    try { cb(null, peerSync.normalizeUrl(`http://${address}:${PORT}`)); }
+    catch (error) { cb(error); }
   });
 }
 
@@ -1027,6 +1161,59 @@ function handleApi(req, res, url) {
     res.end(body);
   };
 
+  // Peer eslestirme talebi ve replikasyon trafigi normal kullanici parolasini
+  // kullanmaz. Eslestirme kisa omurlu kod + iki tarafli onayla; veri trafigi
+  // yalniz 256-bit peer tokeniyla dogrulanir.
+  if (url.pathname === '/api/sync/pair/claim' && req.method === 'POST') {
+    if (pairHizAsildi(req.socket.remoteAddress || '?', Date.now()))
+      return txt(429, 'cok fazla deneme - 1 dakika bekleyin');
+    return readBody(req, (error, body) => {
+      if (error) return txt(400, error);
+      try {
+        const result = replicaSync.claimPair(body || {});
+        broadcast({ type: 'peer-pair' });
+        txt(200, JSON.stringify(result), 'application/json');
+      } catch (claimError) { txt(400, String(claimError.message || claimError)); }
+    });
+  }
+  if (url.pathname === '/api/sync/pair/confirm' && req.method === 'POST') {
+    return readBody(req, (error, body) => {
+      if (error) return txt(400, error);
+      try {
+        const result = replicaSync.confirmPair(body || {});
+        broadcast({ type: 'peer-sync' });
+        txt(200, JSON.stringify(result), 'application/json');
+      } catch (confirmError) { txt(403, String(confirmError.message || confirmError)); }
+    });
+  }
+  if (url.pathname.startsWith('/api/sync/replica/')) {
+    const peer = replicaSync.authenticate(req.headers['x-sync-key']);
+    if (!peer) return txt(401, 'peer kimligi dogrulanamadi');
+    if (url.pathname === '/api/sync/replica/changes' && req.method === 'GET') {
+      flushPendingSaves();
+      replicaSync.scan();
+      return txt(200, JSON.stringify(replicaSync.changes(url.searchParams.get('since'))), 'application/json');
+    }
+    if (url.pathname === '/api/sync/replica/content' && req.method === 'GET') {
+      const name = safeNoteId(url.searchParams.get('name') || '');
+      const hash = String(url.searchParams.get('hash') || '').toLowerCase();
+      if (!name) return txt(400, 'gecersiz not yolu');
+      if (!/^[a-f0-9]{64}$/.test(hash)) return txt(400, `gecersiz not ozeti (${hash.length})`);
+      try {
+        const content = replicaSync.readVersion(name, hash);
+        res.writeHead(200, {
+          'Content-Type': 'text/markdown; charset=utf-8',
+          'Content-Length': Buffer.byteLength(content),
+          'X-Content-Hash': hash,
+          'Cache-Control': 'no-store',
+        });
+        res.end(content);
+      } catch { txt(404, 'not surumu yok'); }
+      return;
+    }
+    return txt(404, 'sync ucu yok');
+  }
+
   // yeni-cihaz tarafi uclari kimlik ISTEMEZ (henuz token'i yok) - guvenlik
   // tek kullanimlik kod + claimId + cift onayla saglanir. Digerleri (kod
   // uretme, host onayi, cihaz listesi) authed'dir, asagida akar.
@@ -1063,30 +1250,50 @@ function handleApi(req, res, url) {
   // AI KONSEY: komutla (/claude /codex /all) yerel CLI ajanlarini konustur.
   // Sadece bu bilgisayardan (localOnly) — CLI'lar host makinede.
   if (url.pathname === '/api/konsey' && req.method === 'POST') {
-    if (!localOnly()) return;
+    if (!masterOnly() || !localOnly()) return;
     return readBody(req, (err, body) => {
       if (err) return txt(400, err);
       const agent = String((body && body.agent) || 'all').toLowerCase();
       const message = String((body && body.message) || '').trim();
       const transcript = String((body && body.transcript) || '');
-      const claudeModel = (body && body.claudeModel) || '';
-      const codexModel = (body && body.codexModel) || '';
+      if (!['claude', 'codex', 'all'].includes(agent)) return txt(400, 'gecersiz ajan');
       if (!message) return txt(400, 'mesaj bos');
+      if (message.length > KONSEY_MAX_MESSAGE) return txt(413, `mesaj en fazla ${KONSEY_MAX_MESSAGE} karakter olabilir`);
+      if (transcript.length > KONSEY_MAX_TRANSCRIPT) return txt(413, `konusma gecmisi en fazla ${KONSEY_MAX_TRANSCRIPT} karakter olabilir`);
+      let claudeModel, codexModel;
+      try {
+        claudeModel = temizModel((body && body.claudeModel) || '', 'Claude');
+        codexModel = temizModel((body && body.codexModel) || '', 'Codex');
+      } catch (modelError) { return txt(400, String(modelError.message || modelError)); }
+      if (konseyActive >= 1) return txt(429, 'AI Konsey mesgul; mevcut yanit tamamlaninca yeniden dene');
+      konseyActive++;
       const hedefler = agent === 'claude' ? ['Claude'] : agent === 'codex' ? ['Codex'] : ['Claude', 'Codex'];
       const replies = [];
       let kalan = hedefler.length;
+      let tamamlandi = false;
+      const cevaplandi = (isim, text) => {
+        replies.push({ name: isim, text });
+        if (--kalan !== 0 || tamamlandi) return;
+        tamamlandi = true;
+        konseyActive = Math.max(0, konseyActive - 1);
+        replies.sort((a, b) => hedefler.indexOf(a.name) - hedefler.indexOf(b.name));
+        txt(200, JSON.stringify({ replies }), 'application/json');
+      };
       hedefler.forEach((isim) => {
         const runner = isim === 'Codex' ? codexCalistir : claudeCalistir;
         const model = isim === 'Codex' ? codexModel : claudeModel;
-        runner(konseyPrompt(isim, message, transcript), model, (text) => {
-          replies.push({ name: isim, text });
-          if (--kalan === 0) {
-            replies.sort((a, b) => hedefler.indexOf(a.name) - hedefler.indexOf(b.name));
-            txt(200, JSON.stringify({ replies }), 'application/json');
-          }
-        });
+        try { runner(konseyPrompt(isim, message, transcript), model, (text) => cevaplandi(isim, text)); }
+        catch (runnerError) { cevaplandi(isim, `(${isim.toLowerCase()} cevap veremedi: ${String(runnerError.message || runnerError).slice(0, 200)})`); }
       });
     });
+  }
+
+  if (url.pathname === '/api/avci/status' && req.method === 'GET') {
+    if (!masterOnly()) return;
+    avciStatus()
+      .then((status) => txt(200, JSON.stringify(status), 'application/json'))
+      .catch((error) => txt(200, JSON.stringify({ online: false, reason: String(error.message || error), checkedAt: Date.now() }), 'application/json'));
+    return;
   }
 
   if (url.pathname === '/api/session' && req.method === 'GET') {
@@ -1360,6 +1567,7 @@ function handleApi(req, res, url) {
       otoZihin: config.otoZihin !== false,
       otoZihinSn: Number(config.otoZihinSn) || 120,
       cevapModeli: CEVAP_MODELI,
+      avciUrl: (() => { try { return configuredAvciUrl(); } catch { return ''; } })(),
       claudeEnabled: !!config.claudeApiKey,
       dataDir: DATA_DIR,
     }), 'application/json');
@@ -1390,6 +1598,10 @@ function handleApi(req, res, url) {
       for (const k of ['gitAutoPush', 'otoZihin']) if (b[k] !== undefined) next[k] = !!b[k];
       for (const k of ['gitPushDelayMs', 'otoZihinSn']) if (b[k] !== undefined && Number(b[k]) > 0) next[k] = Number(b[k]);
       if (b.cevapModeli !== undefined) next.cevapModeli = String(b.cevapModeli).trim().slice(0, 80) || 'qwen3:8b';
+      if (b.avciUrl !== undefined) {
+        try { next.avciUrl = normalizeAvciUrl(b.avciUrl); }
+        catch (error) { return txt(400, String(error.message || error)); }
+      }
       if (Object.prototype.hasOwnProperty.call(b, 'password')) {
         const pw = String(b.password || '');
         if (pw && pw.length < 12) return txt(400, 'parola en az 12 karakter olmali');
@@ -1722,6 +1934,88 @@ function handleApi(req, res, url) {
     return makePairCode((code) => txt(200, code));
   }
 
+  // --- Kalici iki-yonlu peer replikasyonu ---
+  if (url.pathname === '/api/sync/status' && req.method === 'GET') {
+    if (!masterOnly()) return;
+    return txt(200, JSON.stringify(replicaSync.status()), 'application/json');
+  }
+  if (url.pathname === '/api/sync/pair/new' && req.method === 'POST') {
+    if (!masterOnly()) return;
+    return getAdvertisedUrl((addressError, address) => {
+      if (addressError) return txt(400, String(addressError.message || addressError));
+      try { txt(200, JSON.stringify(replicaSync.pairCode(address)), 'application/json'); }
+      catch (error) { txt(400, String(error.message || error)); }
+    });
+  }
+  if (url.pathname === '/api/sync/pair/connect' && req.method === 'POST') {
+    if (!masterOnly() || !localOnly()) return;
+    return readBody(req, (bodyError, body) => {
+      if (bodyError) return txt(400, bodyError);
+      getAdvertisedUrl((addressError, localUrl) => {
+        if (addressError) return txt(400, String(addressError.message || addressError));
+        replicaSync.connect(body?.address, body?.code, localUrl, body?.deviceName)
+          .then((result) => {
+            broadcast({ type: 'peer-pair' });
+            txt(202, JSON.stringify(result), 'application/json');
+          })
+          .catch((error) => txt(400, String(error.message || error)));
+      });
+    });
+  }
+  if (url.pathname === '/api/sync/pair/pending' && req.method === 'GET') {
+    if (!masterOnly()) return;
+    return txt(200, JSON.stringify(replicaSync.pendingPairs()), 'application/json');
+  }
+  if (url.pathname === '/api/sync/pair/approve' && req.method === 'POST') {
+    if (!masterOnly()) return;
+    return readBody(req, (bodyError, body) => {
+      if (bodyError) return txt(400, bodyError);
+      getAdvertisedUrl((addressError, localUrl) => {
+        if (addressError) return txt(400, String(addressError.message || addressError));
+        replicaSync.approvePair(body?.code, localUrl)
+          .then((result) => {
+            broadcast({ type: 'peer-sync' });
+            txt(200, JSON.stringify(result), 'application/json');
+          })
+          .catch((error) => txt(409, String(error.message || error)));
+      });
+    });
+  }
+  if (url.pathname === '/api/sync/pair/reject' && req.method === 'POST') {
+    if (!masterOnly()) return;
+    return readBody(req, (bodyError, body) => {
+      if (bodyError) return txt(400, bodyError);
+      const removed = replicaSync.rejectPair(body?.code);
+      broadcast({ type: 'peer-pair' });
+      txt(removed ? 200 : 404, removed ? 'reddedildi' : 'bekleyen eslestirme yok');
+    });
+  }
+  if (url.pathname === '/api/sync/now' && req.method === 'POST') {
+    if (!masterOnly()) return;
+    replicaSync.syncAll()
+      .then((results) => txt(200, JSON.stringify({ ok: true, results, status: replicaSync.status() }), 'application/json'))
+      .catch((error) => txt(500, String(error.message || error)));
+    return;
+  }
+  if (url.pathname === '/api/sync/peer/pause' && req.method === 'POST') {
+    if (!masterOnly()) return;
+    return readBody(req, (bodyError, body) => {
+      if (bodyError) return txt(400, bodyError);
+      const peer = replicaSync.pausePeer(body?.id, body?.paused);
+      if (peer) broadcast({ type: 'peer-sync' });
+      txt(peer ? 200 : 404, peer ? JSON.stringify(peer) : 'peer yok', peer ? 'application/json' : undefined);
+    });
+  }
+  if (url.pathname === '/api/sync/peer/remove' && req.method === 'POST') {
+    if (!masterOnly()) return;
+    return readBody(req, (bodyError, body) => {
+      if (bodyError) return txt(400, bodyError);
+      const removed = replicaSync.removePeer(body?.id);
+      broadcast({ type: 'peer-sync' });
+      txt(removed ? 200 : 404, removed ? 'baglanti kaldirildi' : 'peer yok');
+    });
+  }
+
   // --- yeni eslestirme: tek kullanimlik kod + cift onay + cihaz token'i ---
   // ana cihaz kod uretir (bu uc AUTHED - handleApi baslangicinda gecti)
   if (url.pathname === '/api/pair/new' && req.method === 'POST') {
@@ -2018,8 +2312,11 @@ const server = http.createServer((req, res) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  if (!['/graphify', '/graphify/', '/pano', '/pano/'].includes(url.pathname))
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ws: wss:; frame-src 'self' http://127.0.0.1:7788 http://localhost:7788; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'");
+  if (!['/graphify', '/graphify/', '/pano', '/pano/'].includes(url.pathname)) {
+    let avciFrameSource = 'http://127.0.0.1:7788';
+    try { avciFrameSource = new URL(configuredAvciUrl()).origin; } catch {}
+    res.setHeader('Content-Security-Policy', `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ws: wss:; frame-src 'self' ${avciFrameSource}; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'`);
+  }
   if (url.pathname === '/api/health') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ app: 'notlar-sync', ok: true, version: APP_VERSION }));
@@ -2083,6 +2380,57 @@ function broadcast(msg, except) {
     if (c !== except && c.readyState === 1 && c.authed) c.send(s);
   }
 }
+
+function replicaApplied(event) {
+  if (!event || !event.name) return;
+  if (event.type === 'deleted') {
+    clearTimeout(saveTimers[event.name]);
+    delete saveTimers[event.name];
+    pendingCreates.delete(event.name);
+    delete latest[event.name];
+    markInternalFs(event.name, true);
+    broadcast({ type: 'deleted', name: event.name, replicated: true });
+    autoPush();
+    fireWebhook('not-silindi', event.name);
+    return;
+  }
+  if (event.type === 'conflict') {
+    latest[event.name] = event.content;
+    latest[event.copy] = event.conflictContent;
+    markInternalFs(event.name);
+    markInternalFs(event.copy);
+    broadcast({ type: 'content', name: event.name, content: event.content, live: true, replicated: true });
+    broadcast({ type: 'saved', name: event.name, hash: icerikHash(event.content) });
+    broadcast({ type: 'conflict', name: event.name, copy: event.copy, replicated: true });
+    autoPush();
+    fireWebhook('not-kaydedildi', event.name);
+    return;
+  }
+  if (event.type === 'content') {
+    latest[event.name] = event.content;
+    markInternalFs(event.name);
+    broadcast({ type: 'content', name: event.name, content: event.content, live: true, replicated: true });
+    broadcast({ type: 'saved', name: event.name, hash: icerikHash(event.content) });
+    autoPush();
+    fireWebhook('not-kaydedildi', event.name);
+  }
+}
+
+replicaSync = peerSync.createReplica({
+  dataDir: DATA_DIR,
+  notesDir: NOTES_DIR,
+  deviceName: config.deviceName || require('os').hostname(),
+  autoStart: false,
+  beforeSync: async () => flushPendingSaves(),
+  onApplied: replicaApplied,
+  onSync: (result) => {
+    broadcast({ type: 'peer-sync' });
+    if (result && !result.error && (result.applied || result.deleted || result.conflicts)) {
+      broadcast({ type: 'list', notes: listNotes(), folders: listFolders() });
+      broadcast({ type: 'overview' });
+    }
+  },
+});
 
 wss.on('connection', (ws, req) => {
   ws.authed = false;
@@ -2224,6 +2572,7 @@ function disDegisiklikleriTara() {
     try {
       const content = fs.readFileSync(notePath(name), 'utf8');
       latest[name] = content;
+      replicaTrack(name);
       broadcast({ type: 'content', name, content, live: true, external: true });
       broadcast({ type: 'saved', name, hash: icerikHash(content) });
     } catch {}
@@ -2232,6 +2581,7 @@ function disDegisiklikleriTara() {
   for (const name of knownNotes.keys()) {
     if (next.has(name) || isExpectedFsEvent(name, null, now)) continue;
     delete latest[name];
+    replicaTrack(name, true);
   }
 
   knownNotes = next;
@@ -2260,6 +2610,7 @@ server.on('error', (e) => {
     clearTimeout(otoTimer);
     clearTimeout(pushTimer);
     try { notesWatcher?.close(); } catch {}
+    try { replicaSync?.close(); } catch {}
     // `node server.js` ikinci bir sunucu olarak calistirildiysa temiz cik. Electron
     // icinden require edildiyse ana uygulama mevcut sunucuya baglanmaya devam eder.
     if (require.main === module) process.exit(0);
@@ -2268,6 +2619,7 @@ server.on('error', (e) => {
   throw e;
 });
 server.listen(PORT, '0.0.0.0', () => {
+  replicaSync.start();
   const nets = require('os').networkInterfaces();
   const ips = [];
   for (const name of Object.keys(nets))
@@ -2277,4 +2629,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('  Bu PC:      http://localhost:' + PORT);
   ips.forEach(ip => console.log('  Diger PC:   http://' + ip + ':' + PORT));
   if (process.env.NOTLAR_NO_RUNTIME_START !== '1') installer.ensureOllamaService().catch(() => {});
+});
+server.on('close', () => {
+  try { replicaSync?.close(); } catch {}
 });

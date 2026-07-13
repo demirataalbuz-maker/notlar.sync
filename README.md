@@ -1,11 +1,12 @@
 # 🗒️ Notlar Sync
 
-İki (veya daha fazla) bilgisayar arasında **anlık senkron** çalışan, yerel öncelikli masaüstü not ve kişisel bilgi alanı. Bir cihazda yazdığın değişiklik diğer cihazlarda anında belirir; bağlantı kesilirse taslak cihazda kalır ve dönüşte çakışma korumalı gönderilir.
+İki (veya daha fazla) bilgisayar arasında **anlık ve çevrimdışı çalışabilen senkron** sunan, yerel öncelikli masaüstü not ve kişisel bilgi alanı. Her eşleşmiş bilgisayar notların tam yerel kopyasını tutar. Bir cihaz kapalıyken ötekinde yazmaya devam edebilir, iki cihaz yeniden çevrimiçi olduğunda değişiklikleri otomatik birleştirebilirsin.
 
 - Electron masaüstü uygulaması ve telefona kurulabilen PWA
 - Genel Bakış, Notlar, AI Beyni, Şifre Kasası, Kodlama Araçları, Yerel AI, Belge, Kurulum, Senkron ve Ayarlar için ayrı tam sayfa menüler
 - Notlar gerçek alt klasörleri korunarak düz `.md` dosyaları halinde saklanır (`notes/` klasörü)
-- WebSocket ile canlı senkron; IndexedDB tabanlı kalıcı çevrimdışı taslak kuyruğu
+- Bilgisayarlar arasında vector-clock tabanlı kalıcı peer replikasyonu; aynı sunucuya bağlı tarayıcılarda WebSocket ile canlı güncelleme
+- Bağlantı kesilince yerel `.md` dosyalarına yazma, dönüşte otomatik yakalama; eşzamanlı iki sürümde veri kaybetmeyen çakışma kopyası
 - Çöp kutusu, geri yükleme, sabitleme ve bağlantıları da güncelleyen güvenli yeniden adlandırma
 - Ana parola ile host yönetimi, her eşleşmiş cihaz için ayrı iptal edilebilir erişim anahtarı
 
@@ -31,14 +32,19 @@ Ayar dosyası ilk açılışta `~/NotlarSync/app-config.json` olarak oluşur.
 
 ## İki PC'yi bağlama
 
-Bir PC **ana cihaz** olur (sunucu onun içinde çalışır), diğerleri iptal edilebilir cihaz anahtarıyla bağlanır.
+İki bilgisayara da Notlar Sync'i kurup normal **yerel kopya** modunda aç. Eşleştirme yalnız bir kere yapılır:
 
-**Host PC** — `~/NotlarSync/app-config.json`:
-```json
-{ "mode": "host", "password": "guclu-bir-parola" }
-```
+1. İki bilgisayarı da aç ve **Senkron ve Cihazlar** sayfasına gir.
+2. İlk bilgisayarda **6 haneli kod üret** düğmesine bas; ekrandaki adresi ve kodu al.
+3. İkinci bilgisayarda adresi, bu cihazın adını ve kodu girip **Bağlantı isteği gönder** düğmesine bas.
+4. İlk bilgisayarda beliren cihaz adını/adresini kontrol edip **Onayla**.
+5. İlk kopyalama otomatik başlar. Bundan sonra uygulamalar açık ve birbirine erişebilir olduğunda beş saniye içinde otomatik eşitlenir; **Şimdi eşitle** yalnız isteğe bağlı elle yoklamadır.
 
-Ana cihazda **Senkron ve Cihazlar → Eşleştirme kodu üret** düğmesine bas. Yeni cihazın ilk kurulum ekranında adresi, cihaz adını ve 6 haneli kodu gir; iki cihaz da onay verince yalnız o cihaza ait bir anahtar atanır. Kaybolan cihazı aynı sayfadan iptal etmek diğer cihazları etkilemez.
+Her iki taraf bağımsız yazabilir. A kapalıyken B'de, B kapalıyken A'da yapılan not değişiklikleri diskte bekler ve yeniden buluşunca iki yönde taşınır. Aynı not iki tarafta ortak tabandan sonra farklı düzenlenmişse sistem bir sürümü ana not, diğerini `- çakışma <cihaz>-<özet>` adlı ayrı not yapar; hiçbir içerik sessizce ezilmez. Nedensel silmeler tombstone olarak yayılır ve eski cihaz notu yanlışlıkla diriltmez.
+
+Peer anahtarları 256 bittir; API durumunda veya arayüzde gösterilmez. `~/NotlarSync/sync/` dizini `0700`, durum/cihaz dosyaları ve içerik sürüm blobları `0600` izinleriyle, atomik yazılır. **Kaldır** yalnız otomatik bağlantıyı siler; iki bilgisayardaki yerel notları silmez.
+
+Eski **ana cihaz / istemci** modu ve tarayıcı erişim kodları geriye uyumluluk için durur; gerçek çevrimdışı iki-PC kullanımı için iki masaüstünde de yerel kopya eşleştirmesini kullan.
 
 ## Farklı ağlardan erişim
 
@@ -49,6 +55,8 @@ En kolay ve güvenli yol [Tailscale](https://tailscale.com): iki PC'ye de kur, a
 ## Bilinen kısıtlar
 
 - Bu bir ortak-yazım CRDT editörü değildir. Aynı not iki cihazda eşzamanlı değiştirilirse sürümler sessizce ezilmez; yerel sürüm zaman damgalı bir çakışma notuna alınır.
+- Peer replikasyonunun bu sürümü Markdown notlarını ve not yolu içindeki klasör yapısını taşır. Boş klasörler, `files/` ekleri, Şifre Kasası, yapılandırılmış AI hafızası ve Saldırı Avcısı'nın kendi verisi henüz peer'ler arasında kopyalanmaz.
+- Telefon/PWA ana bilgisayara canlı bağlanabilir ve çevrimdışı tarayıcı taslağı tutar; telefon bu sürümde bağımsız peer sunucusu değildir. Tam çevrimdışı iki yönlü replikasyon masaüstü uygulamaları arasındadır.
 - Şifre kasasının ana parolası kurtarılamaz. Sunucu bu parolayı veya çözülmüş kasa içeriğini bilmez.
 
 ## Otomatik GitHub yedeği
@@ -213,6 +221,22 @@ ve yeni, boş bir kasa oluşturmayı sağlar.
   "AI'a sor" panelini açar. Model gömülü değildir; mevcut Ollama'n kullanılır,
   hiçbir veri internete çıkmaz. Ollama kurulu/açık değilse panel "AI yok/kapalı"
   hatası gösterir; uygulamanın geri kalanı etkilenmez.
+
+### AI Konsey ve Saldırı Avcısı
+
+**AI Konsey**, bu bilgisayarda giriş yapılmış Claude ve Codex CLI'larını `/claude`,
+`/codex` veya `/all` komutuyla çağırır. Her çağrı boş bir geçici çalışma dizininde;
+Claude araçları kapalı, Codex salt-okunur sandbox'ta, 120 saniye ve 1 MiB çıktı
+sınırıyla çalışır. CLI hesabına göre metin bulut sağlayıcıya gönderilebilir; parola,
+token veya özel sır yapıştırma. Konsey yalnız ana masaüstündeki yerel isteklerden
+çalıştırılabilir ve sohbet istenirse normal Markdown nota kaydedilebilir; kaydedilen
+not peer senkronuna dahildir.
+
+**AI Saldırı Avcısı** ayrı bir yerel uygulamadır. Notlar Sync yalnız servis durumunu
+yoklar ve hazırsa arayüzünü çerçeveler; notları veya eşleştirme anahtarlarını ona
+aktarmaz. Varsayılan adres `http://127.0.0.1:7788/` olup Ayarlar'dan başka bir yerel
+http/https adresine değiştirilebilir. Servis kapalıysa boş ekran yerine durum ve
+yeniden deneme düğmesi görünür.
 
 ## Tarayıcı eklentisi (web şifrelerini yakala)
 

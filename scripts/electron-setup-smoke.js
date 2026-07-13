@@ -40,7 +40,7 @@ async function main() {
     configPathLeaked: new URLSearchParams(location.search).has('config'),
     csp: document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content || ''
   }))()`);
-  const required = ['done', 'pairApprove', 'pairClaim', 'pairStatus', 'patchConfig', 'status'];
+  const required = ['done', 'pairApprove', 'pairClaim', 'pairStatus', 'peerConnect', 'peerStatus', 'patchConfig', 'status'];
   if (!state.nodeHidden || !state.apiPresent || state.configPathLeaked
     || !required.every((method) => state.methods.includes(method)) || !state.csp.includes("script-src 'self'")) {
     throw new Error(`Setup preload validation failed: ${JSON.stringify(state)}`);

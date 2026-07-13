@@ -475,6 +475,34 @@
   #settings { position: relative; inset: auto; z-index: 1; flex: 1; height: 100vh; background: var(--bg); align-items: stretch; justify-content: flex-start; overflow: auto; }
   #settingsCard { width: 100%; max-width: 920px; max-height: none; overflow: visible; margin: 0 auto; background: none; border: 0; border-radius: 0; box-shadow: none; padding: 28px 32px 48px; }
   #settingsCard > h2 { display: none; }
+  .syncHero {
+    display: grid; grid-template-columns: 52px minmax(0,1fr) auto; gap: 16px; align-items: center;
+    padding: 20px; border: 1px solid var(--border); border-radius: 12px;
+    background: linear-gradient(135deg, rgba(137,220,169,.08), rgba(105,214,229,.035));
+  }
+  .syncHeroIcon { width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center; background: #17372b; color: var(--accent); font-size: 25px; }
+  .syncHero h2 { color: var(--head); font-size: 18px; margin-bottom: 5px; }
+  .syncHero p { color: var(--muted); font-size: 12px; line-height: 1.55; }
+  .syncMeta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 9px; color: var(--muted); font: 10.5px var(--mono); }
+  .syncGrid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; margin-top: 18px; }
+  .syncPanel { border: 1px solid var(--border); border-radius: 10px; padding: 18px; background: var(--panel); min-width: 0; }
+  .syncPanel h3 { color: var(--head) !important; font-size: 13px !important; text-transform: none !important; margin-bottom: 5px !important; }
+  .syncPanel > p { margin-bottom: 14px; font-size: 11.5px; }
+  .syncFields { display: grid; gap: 8px; }
+  .syncFields input { width: 100%; min-width: 0; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 9px 10px; font: 12px var(--mono); }
+  .syncFields input:focus { border-color: var(--accent); outline: none; }
+  .syncCode { display: none; margin: 10px 0; padding: 13px; text-align: center; font: 700 28px var(--mono); letter-spacing: .08em; color: var(--accent); border: 1px dashed var(--border2); border-radius: 8px; background: var(--bg); user-select: all; }
+  .syncFeedback { min-height: 18px; margin-top: 9px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+  .peerList { display: grid; gap: 9px; margin-top: 12px; }
+  .peerRow { display: grid; grid-template-columns: 10px minmax(0,1fr) auto; gap: 11px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
+  .peerDot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 3px rgba(255,255,255,.025); }
+  .peerDot.online { background: var(--accent); box-shadow: 0 0 0 3px rgba(137,220,169,.12); }
+  .peerName { color: var(--head); font-size: 13px; font-weight: 650; }
+  .peerDetail { margin-top: 3px; color: var(--muted); font-size: 10.5px; overflow-wrap: anywhere; }
+  .peerActions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .pendingPeer { border-color: #5e4d27; background: rgba(244,189,98,.055); }
+  .legacySync { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .legacySync summary { cursor: pointer; color: var(--muted); font-size: 11px; }
   #appSettings { flex: 1; }
   .settingsGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .72fr); gap: 28px; }
   .settingsSection { border-top: 1px solid var(--border); padding: 16px 0; }
@@ -537,6 +565,12 @@
     .overviewGrid { gap: 24px; }
     .settingRow { grid-template-columns: 1fr; gap: 7px; }
     .settingRow input[type="checkbox"] { justify-self: start; }
+    .syncHero { grid-template-columns: 42px minmax(0,1fr); padding: 15px; }
+    .syncHeroIcon { width: 42px; height: 42px; font-size: 21px; }
+    .syncHero > .sBtn { grid-column: 1 / -1; width: 100%; }
+    .syncGrid { grid-template-columns: 1fr; }
+    .peerRow { grid-template-columns: 9px minmax(0,1fr); }
+    .peerActions { grid-column: 2; justify-content: flex-start; }
     .vaultPasswordGrid { grid-template-columns: 1fr; }
     .runtimeRow { grid-template-columns: 24px minmax(0,1fr) auto; padding: 8px 0; }
     .runtimeRow .statusPill { display: none; }
@@ -757,13 +791,24 @@
   </div>
 
   <section id="settings" class="featureView" aria-label="Senkron ve Cihazlar">
-    <div style="width:100%"><header class="featureTopbar"><h1>Senkron ve Cihazlar</h1><p>Bu bilgi alanına erişen cihazları yönet</p><span class="spacer"></span><span id="syncRole" class="statusPill info">host</span></header>
+    <div style="width:100%"><header class="featureTopbar"><h1>Senkron ve Cihazlar</h1><p>İki bilgisayar, iki yerel kopya, tek çalışma alanı</p><span class="spacer"></span><span id="syncRole" class="statusPill info">yerel kopya</span></header>
       <div id="settingsCard"><h2>Senkron <button id="kapatSet">✕</button></h2>
-        <div class="sBlok" style="border-top:none;padding-top:0"><h3>Başka cihaz eşleştir</h3><p>Tek kullanımlık 6 haneli kod üret. Yeni cihaz ve bu ana cihaz ayrı ayrı onay verdiğinde cihaza iptal edilebilir özel anahtar atanır.</p>
-          <div id="pairKod" style="display:none;font-size:32px;letter-spacing:0;text-align:center;font-family:var(--mono);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:14px;margin-bottom:8px"></div>
-          <div id="pairKodNot" style="display:none;font-size:12px;color:var(--muted);text-align:center;margin-bottom:8px"></div><button class="sBtn" id="kodBtn">Eşleştirme kodu üret</button>
+        <section class="syncHero">
+          <div class="syncHeroIcon">⇄</div>
+          <div><h2>Çevrimdışı yaz, yeniden buluşunca otomatik birleşsin</h2><p>Her cihaz notların tam yerel kopyasını tutar. Bağlantı geri geldiğinde eksik sürümler kendiliğinden paylaşılır; çakışan iki içerik de korunur.</p><div class="syncMeta"><span id="peerDeviceName">bu cihaz</span><span id="peerRevision">rev 0</span><span id="peerNoteCount">0 kayıt</span></div></div>
+          <button id="peerSyncNow" class="sBtn gri">Şimdi eşitle</button>
+        </section>
+        <div id="peerGlobalFeedback" class="syncFeedback"></div>
+        <div class="syncGrid">
+          <section class="syncPanel"><h3>Bu cihazda kod üret</h3><p>Diğer bilgisayar bu kısa kodla ortak çalışma alanına katılır. Kod üç dakika geçerlidir.</p><button class="sBtn" id="peerCodeBtn">6 haneli kod üret</button><div id="peerCode" class="syncCode"></div><div id="peerCodeNote" class="syncFeedback"></div></section>
+          <section class="syncPanel"><h3>Mevcut çalışma alanına bağlan</h3><p>Diğer bilgisayarda görünen adresi ve kodu gir. Bu işlem yalnız bir kez yapılır.</p><div class="syncFields"><input id="peerAddress" placeholder="http://100.x.x.x:7777" autocomplete="url"><input id="peerNameInput" placeholder="Bu cihazın adı" maxlength="80"><input id="peerCodeInput" placeholder="6 haneli kod" inputmode="numeric" maxlength="6"></div><button class="sBtn" id="peerConnectBtn" style="margin-top:10px">Bağlantı isteği gönder</button><div id="peerConnectFeedback" class="syncFeedback"></div></section>
         </div>
-        <div class="sBlok" id="cihazBlok"><h3>Bağlı cihazlar</h3><p>Bir cihazı kaybedersen yalnızca onun erişimini iptal et.</p><div id="cihazListe" style="font-size:13px">yükleniyor…</div></div>
+        <section id="peerPendingWrap" class="syncPanel pendingPeer" style="display:none;margin-top:16px"><h3>Onay bekleyen bilgisayar</h3><div id="peerPendingList" class="peerList"></div></section>
+        <section class="syncPanel" style="margin-top:16px"><h3>Ortak alan cihazları</h3><p>Çevrimiçi cihazlar otomatik eşitlenir. Bir cihaz kapalıysa değişiklikler yerelde bekler.</p><div id="peerList" class="peerList"><div class="peerDetail">Henüz ortak alan cihazı yok.</div></div></section>
+        <details class="legacySync"><summary>Eski tarayıcı/istemci erişimi</summary>
+          <div class="sBlok"><h3>Salt erişim anahtarı üret</h3><p>Yerel kopya oluşturmayan eski istemciler için tek kullanımlık erişim kodu.</p><div id="pairKod" style="display:none;font-size:28px;text-align:center;font-family:var(--mono);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:14px;margin-bottom:8px"></div><div id="pairKodNot" style="display:none;font-size:12px;color:var(--muted);text-align:center;margin-bottom:8px"></div><button class="sBtn gri" id="kodBtn">Eski istemci kodu üret</button></div>
+          <div class="sBlok" id="cihazBlok"><h3>Eski erişim cihazları</h3><div id="cihazListe" style="font-size:13px">yükleniyor…</div></div>
+        </details>
       </div>
     </div>
   </section>
@@ -772,8 +817,8 @@
     <header class="featureTopbar"><h1 id="settingsTitle">Ayarlar</h1><p id="settingsDataDir"></p><span class="spacer"></span><button id="settingSave" class="sBtn">Değişiklikleri kaydet</button></header>
     <div class="featureBody settingsGrid">
       <div>
-        <section class="settingsSection"><h3>Çalışma modu</h3><div class="settingRow"><label>Bu cihaz<small>Ana cihaz notları sunar; istemci ana cihaza bağlanır.</small></label><select id="settingMode"><option value="host">Ana cihaz</option><option value="client">İstemci</option></select></div><div class="settingRow"><label>Sunucu adresi</label><input id="settingServer" placeholder="http://100.x.x.x:7777"></div><div class="settingRow"><label>Port</label><input id="settingPort" type="number" min="1024" max="65535"></div></section>
-        <section class="settingsSection"><h3>Yedek ve zihin</h3><div class="settingRow"><label>GitHub otomatik yedek<small>Değişiklikler sessizlikten sonra push edilir.</small></label><input id="settingGit" type="checkbox"></div><div class="settingRow"><label>Otomatik bağlantı önerileri</label><input id="settingOto" type="checkbox"></div><div class="settingRow"><label>Yerel cevap modeli</label><input id="settingModel" placeholder="qwen3:8b"></div></section>
+        <section class="settingsSection"><h3>Çalışma modu</h3><div class="settingRow"><label>Bu cihaz<small>Yerel kopya çevrimdışı çalışır. Uzak istemci yalnız eski kurulumlarla uyumluluk içindir.</small></label><select id="settingMode"><option value="host">Yerel kopya (önerilen)</option><option value="client">Eski uzak istemci</option></select></div><div class="settingRow"><label>Eski istemci sunucusu</label><input id="settingServer" placeholder="http://100.x.x.x:7777"></div><div class="settingRow"><label>Yerel port</label><input id="settingPort" type="number" min="1024" max="65535"></div></section>
+        <section class="settingsSection"><h3>Yedek ve zihin</h3><div class="settingRow"><label>GitHub otomatik yedek<small>Değişiklikler sessizlikten sonra push edilir.</small></label><input id="settingGit" type="checkbox"></div><div class="settingRow"><label>Otomatik bağlantı önerileri</label><input id="settingOto" type="checkbox"></div><div class="settingRow"><label>Yerel cevap modeli</label><input id="settingModel" placeholder="qwen3:8b"></div><div class="settingRow"><label>Saldırı Avcısı adresi<small>Yalnız bu bilgisayardaki yerel servis kabul edilir.</small></label><input id="settingAvciUrl" placeholder="http://127.0.0.1:7788/"></div></section>
         <section class="settingsSection"><h3>Güvenlik</h3><div class="settingRow"><label>Yeni ana parola<small>Boş bırakırsan mevcut parola korunur.</small></label><input id="settingPassword" type="password" minlength="12" autocomplete="new-password"></div></section>
         <div id="settingsFeedback" style="font-size:12px;color:var(--muted);min-height:18px"></div>
       </div>
@@ -826,7 +871,17 @@
   </section>
 
   <style>
-    #avciFrame { border: none; width: 100%; height: 100%; flex: 1; min-height: 0; background: var(--bg); }
+    #avci { overflow: hidden; }
+    .avciStage { position: relative; display: flex; flex: 1; min-height: 0; background: var(--bg); }
+    #avciFrame { display: none; border: none; width: 100%; height: 100%; flex: 1; min-height: 0; background: var(--bg); }
+    #avciFrame.ready { display: block; }
+    .avciState { width: min(520px, calc(100% - 32px)); margin: auto; padding: 32px; text-align: center; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
+    .avciState.ready { display: none; }
+    .avciStateIcon { width: 58px; height: 58px; margin: 0 auto 16px; display: grid; place-items: center; border-radius: 14px; background: #182e37; color: var(--blue); }
+    .avciStateIcon .appIcon { width: 27px; height: 27px; }
+    .avciState h2 { color: var(--head); font-size: 18px; margin-bottom: 8px; }
+    .avciState p { color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+    .avciStateActions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
     #konsey .featureBody { display: flex; flex-direction: column; flex: 1; gap: 0; padding: 0; margin: 0; max-width: none; min-height: 0; }
     .konseyLog { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
     .konseyMsg { max-width: 760px; border-radius: 12px; padding: 10px 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -839,19 +894,38 @@
     .konseyInputRow { display: flex; gap: 8px; align-items: flex-end; }
     .konseyInputRow textarea { flex: 1; resize: none; }
     .konseyModelSel { font-size: 12px; padding: 4px 7px; border-radius: 7px; max-width: 165px; }
+    .konseyNotice { padding: 7px 16px; color: var(--warn); background: rgba(233,198,106,.055); border-bottom: 1px solid var(--border); font-size: 10.5px; line-height: 1.45; }
+    @media (max-width: 720px) {
+      .avciState { padding: 24px 18px; }
+      #konsey .featureTopbar { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 6px; min-height: 0; padding: 8px 12px; }
+      #konsey .featureTopbar h1 { grid-column: 1; grid-row: 1; }
+      #konsey .featureTopbar p, #konsey .featureTopbar .spacer { display: none; }
+      #konseySave { grid-column: 2; grid-row: 1; }
+      #konseyClear { grid-column: 3; grid-row: 1; }
+      #konseyClaudeModel { grid-column: 1; grid-row: 2; }
+      #konseyCodexModel { grid-column: 2 / 4; grid-row: 2; }
+      .konseyModelSel { width: 100%; max-width: none; min-width: 0; }
+      .konseyLog { padding: 14px 12px; }
+      .konseyBar { padding: 10px 12px 76px; }
+    }
   </style>
 
   <section id="avci" class="featureView" aria-label="AI Saldırı Avcısı">
-    <iframe id="avciFrame" title="AI Saldırı Avcısı"></iframe>
+    <header class="featureTopbar"><h1>AI Saldırı Avcısı</h1><p>Yerel güvenlik çalışma alanı</p><span class="spacer"></span><span id="avciBadge" class="statusPill warn">kontrol ediliyor</span></header>
+    <div class="avciStage">
+      <iframe id="avciFrame" title="AI Saldırı Avcısı" referrerpolicy="no-referrer"></iframe>
+      <div id="avciState" class="avciState"><div class="avciStateIcon"><svg class="appIcon"><use href="#app-shield"/></svg></div><h2 id="avciStateTitle">Yerel servis kontrol ediliyor</h2><p id="avciStateDetail">Saldırı Avcısı ayrı bir yerel uygulamadır; notlar ve eşleştirme anahtarları bu çerçeveye aktarılmaz.</p><div class="avciStateActions"><button id="avciRetry" class="sBtn">Yeniden dene</button><button id="avciSettings" class="miniBtn">Adresi ayarla</button></div></div>
+    </div>
   </section>
 
   <section id="konsey" class="featureView" aria-label="AI Konsey">
     <header class="featureTopbar"><h1>AI Konsey</h1><p>Claude ve Codex'i komutlarla konuştur · <b>/claude</b> · <b>/codex</b> · <b>/all</b></p><span class="spacer"></span><select id="konseyClaudeModel" class="konseyModelSel" title="Claude modeli"><option value="">Claude: varsayılan</option><option value="opus">Claude: opus</option><option value="sonnet">Claude: sonnet</option><option value="haiku">Claude: haiku</option><option value="fable">Claude: fable</option></select><select id="konseyCodexModel" class="konseyModelSel" title="Codex modeli"><option value="">Codex: varsayılan</option><option value="gpt-5.5">Codex: gpt-5.5</option><option value="gpt-5-codex">Codex: gpt-5-codex</option><option value="o3">Codex: o3</option></select><button id="konseySave" class="miniBtn">Nota kaydet</button><button id="konseyClear" class="miniBtn">Temizle</button></header>
     <div class="featureBody">
       <div id="konseyLog" class="konseyLog"></div>
+      <div class="konseyNotice">Gizlilik notu: Claude ve Codex CLI hesapları bulut sağlayıcı kullanabilir. Buraya parola, erişim anahtarı veya özel sır yapıştırma.</div>
       <div class="konseyBar">
         <div class="konseyCmds"><button class="miniBtn" data-cmd="/all ">/all</button><button class="miniBtn" data-cmd="/claude ">/claude</button><button class="miniBtn" data-cmd="/codex ">/codex</button></div>
-        <div class="konseyInputRow"><textarea id="konseyInput" rows="2" placeholder="/all mesajın…  (Enter gönder · Shift+Enter yeni satır)"></textarea><button id="konseySend" class="sBtn">Gönder</button></div>
+        <div class="konseyInputRow"><textarea id="konseyInput" rows="2" maxlength="20000" placeholder="/all mesajın…  (Enter gönder · Shift+Enter yeni satır)"></textarea><button id="konseySend" class="sBtn">Gönder</button></div>
       </div>
     </div>
   </section>
@@ -1077,6 +1151,11 @@ function connect() {
     }
     // yeni cihaz bağlanmak istiyor / onay durumu değişti -> onay kutusunu tazele
     if (m.type === 'pair' && sessionRole === 'master') pairKontrol();
+    if ((m.type === 'peer-sync' || m.type === 'peer-pair') && currentView === 'sync') loadPeerSync();
+    if (m.type === 'deleted' && m.replicated) {
+      cacheNoteDelete(m.name);
+      if (current === m.name) closeNote();
+    }
     // motor belge islemeyi bitirdi (basari da hata da tum cihazlara duyurulur)
     if (m.type === 'belge') {
       $('statusText').textContent = m.hata
@@ -1389,12 +1468,13 @@ let overviewLoading = null;
 
 function updateRoleUi() {
   const host = sessionRole === 'master';
-  $('syncRole').textContent = host ? 'ana cihaz' : 'eşleşmiş cihaz';
+  $('syncRole').textContent = host ? 'yerel kopya' : 'uzak erişim';
   $('syncRole').className = 'statusPill ' + (host ? '' : 'info');
   $('kodBtn').disabled = !host;
   $('kodBtn').title = host ? '' : 'Yalnız ana cihaz yeni eşleştirme başlatabilir';
   $('cihazBlok').style.opacity = host ? '1' : '.55';
   if (!host) $('cihazListe').textContent = 'Cihaz listesi yalnız ana cihazda yönetilir.';
+  for (const id of ['peerCodeBtn', 'peerConnectBtn', 'peerSyncNow']) if ($(id)) $(id).disabled = !host;
   $('settingSave').disabled = !host;
   $('graphifyRebuild').disabled = !host;
   $('graphifyRebuild').title = host ? 'Graphify görünümünü yeniden kur' : 'Yalnız ana cihaz yeniden kurabilir';
@@ -1635,6 +1715,7 @@ async function loadSettings() {
     $('settingGit').checked = data.gitAutoPush;
     $('settingOto').checked = data.otoZihin;
     $('settingModel').value = data.cevapModeli;
+    $('settingAvciUrl').value = data.avciUrl || 'http://127.0.0.1:7788/';
     $('settingsDataDir').textContent = data.dataDir;
   } catch (e) { $('settingsFeedback').textContent = e.message; }
 }
@@ -1651,11 +1732,47 @@ async function loadMemorySettingsStatus() {
   $('settingsIntegrationState').className = `statusPill ${providers.length && ready === providers.length ? '' : 'warn'}`;
 }
 $('settingsBrainBtn').onclick = () => showView('map');
+let avciLoadId = 0;
+async function loadAvci() {
+  const loadId = ++avciLoadId;
+  const frame = $('avciFrame');
+  frame.classList.remove('ready'); frame.src = 'about:blank';
+  $('avciState').classList.remove('ready');
+  $('avciStateTitle').textContent = 'Yerel servis kontrol ediliyor';
+  $('avciStateDetail').textContent = 'Saldırı Avcısı ayrı bir yerel uygulamadır; notlar ve eşleştirme anahtarları bu çerçeveye aktarılmaz.';
+  $('avciBadge').textContent = 'kontrol ediliyor'; $('avciBadge').className = 'statusPill warn';
+  try {
+    const status = await apiJson('/api/avci/status');
+    if (loadId !== avciLoadId || currentView !== 'avci') return;
+    if (!status.online || !status.url) {
+      $('avciStateTitle').textContent = 'Saldırı Avcısı servisi bulunamadı';
+      $('avciStateDetail').textContent = `${status.reason || 'Yerel servis yanıt vermiyor.'}${status.url ? ` Kontrol edilen adres: ${status.url}` : ''}`;
+      $('avciBadge').textContent = 'çevrimdışı'; $('avciBadge').className = 'statusPill warn';
+      return;
+    }
+    frame.onload = () => {
+      if (loadId !== avciLoadId || currentView !== 'avci') return;
+      frame.classList.add('ready'); $('avciState').classList.add('ready');
+      $('avciBadge').textContent = 'yerel servis bağlı'; $('avciBadge').className = 'statusPill';
+    };
+    frame.src = status.url;
+  } catch (error) {
+    if (loadId !== avciLoadId) return;
+    $('avciStateTitle').textContent = 'Saldırı Avcısı açılamadı';
+    $('avciStateDetail').textContent = String(error.message || error);
+    $('avciBadge').textContent = 'erişilemiyor'; $('avciBadge').className = 'statusPill warn';
+  }
+}
+$('avciRetry').onclick = loadAvci;
+$('avciSettings').onclick = () => { showView('settings'); setTimeout(() => $('settingAvciUrl').focus(), 0); };
 async function showView(view) {
   if (!VIEW_BUTTONS[view]) view = 'overview';
+  if (view !== 'sync' && peerSyncTimer) { clearTimeout(peerSyncTimer); peerSyncTimer = null; }
   if (currentView === 'vault' && view !== 'vault') lockVault();
   if (currentView === 'map' && view !== 'map') $('mapFrame').src = 'about:blank';
-  if (currentView === 'avci' && view !== 'avci') $('avciFrame').src = 'about:blank';
+  if (currentView === 'avci' && view !== 'avci') {
+    avciLoadId++; $('avciFrame').src = 'about:blank'; $('avciFrame').classList.remove('ready');
+  }
   currentView = view;
   document.body.dataset.view = view;
   Object.entries(VIEW_BUTTONS).forEach(([name, id]) => $(id).classList.toggle('active', name === view));
@@ -1670,15 +1787,17 @@ async function showView(view) {
     await apiFetch('/api/session').catch(() => {});
     $('mapFrame').src = 'brain.html?embed=1';
   }
-  if (view === 'avci' && (!$('avciFrame').getAttribute('src') || $('avciFrame').getAttribute('src') === 'about:blank')) {
-    $('avciFrame').src = 'http://127.0.0.1:7788/';
-  }
+  if (view === 'avci') loadAvci();
   if (view === 'konsey') konseyInit();
   if (view === 'vault') openVault();
   if (view === 'ai') loadAiStatus();
   if (view === 'document') loadMotorStatus();
   if (view === 'runtime') loadRuntime();
-  if (view === 'sync') { if (sessionRole === 'master') cihazlariYukle(); updateRoleUi(); }
+  if (view === 'sync') {
+    if (sessionRole === 'master') cihazlariYukle();
+    updateRoleUi();
+    loadPeerSync();
+  }
   if (view === 'settings') loadSettings();
 }
 
@@ -1736,6 +1855,7 @@ async function konseyGonder() {
   if (m) { agent = m[1].toLowerCase(); message = m[2].trim(); }
   else if (/^\/(claude|codex|all)\s*$/i.test(raw)) { konseyMsg('sys', '', 'Komuttan sonra bir mesaj yaz.'); return; }
   $('konseyInput').value = '';
+  const history = konseyTranscript;
   konseyMsg('sen', 'Sen', (m ? '/' + agent + ' ' : '') + message);
   konseyTranscript += `\n[SEN]: ${message}\n`;
   konseyBusy = true;
@@ -1744,7 +1864,7 @@ async function konseyGonder() {
   try {
     const claudeModel = ($('konseyClaudeModel') || {}).value || '';
     const codexModel = ($('konseyCodexModel') || {}).value || '';
-    const res = await apiJson('/api/konsey', jsonOptions('POST', { agent, message, transcript: konseyTranscript, claudeModel, codexModel }));
+    const res = await apiJson('/api/konsey', jsonOptions('POST', { agent, message, transcript: history, claudeModel, codexModel }));
     bekle.remove();
     for (const r of (res.replies || [])) {
       konseyMsg(r.name.toLowerCase(), r.name, r.text);
@@ -1790,6 +1910,7 @@ $('settingSave').onclick = async () => {
     gitAutoPush: $('settingGit').checked,
     otoZihin: $('settingOto').checked,
     cevapModeli: $('settingModel').value.trim(),
+    avciUrl: $('settingAvciUrl').value.trim(),
   };
   if (password) payload.password = password;
   $('settingSave').disabled = true;
@@ -1807,6 +1928,151 @@ $('settingSave').onclick = async () => {
       : 'Değişiklikler kaydedildi.';
   } catch (e) { $('settingsFeedback').textContent = e.message; }
   $('settingSave').disabled = sessionRole !== 'master';
+};
+
+// --- iki yerel kopya arasinda kalici, cift yonlu senkron ---
+let peerSyncTimer = null;
+function peerTime(value) {
+  if (!value) return 'henüz eşitlenmedi';
+  const date = new Date(Number(value));
+  if (Number.isNaN(date.getTime())) return 'tarih bilinmiyor';
+  return date.toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
+}
+function peerAction(label, handler, danger = false) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = danger ? 'miniBtn danger' : 'miniBtn';
+  button.textContent = label;
+  button.onclick = async () => {
+    button.disabled = true;
+    try { await handler(); }
+    catch (error) { $('peerGlobalFeedback').textContent = String(error.message || error); }
+    finally { button.disabled = false; }
+  };
+  return button;
+}
+function renderPeerStatus(status) {
+  const device = status?.device || {};
+  $('peerDeviceName').textContent = device.name || 'bu cihaz';
+  $('peerRevision').textContent = `rev ${Number(status?.revision) || 0}`;
+  const liveNotes = Math.max(0, (Number(status?.notes) || 0) - (Number(status?.tombstones) || 0));
+  $('peerNoteCount').textContent = `${liveNotes} not`;
+
+  const pending = Array.isArray(status?.pendingPairings) ? status.pendingPairings : [];
+  $('peerPendingWrap').style.display = pending.length ? '' : 'none';
+  const pendingList = $('peerPendingList');
+  pendingList.replaceChildren();
+  for (const request of pending) {
+    const row = document.createElement('div'); row.className = 'peerRow';
+    const dot = document.createElement('span'); dot.className = 'peerDot';
+    const info = document.createElement('div');
+    const title = document.createElement('div'); title.className = 'peerName'; title.textContent = request.peer?.name || 'İsimsiz bilgisayar';
+    const detail = document.createElement('div'); detail.className = 'peerDetail'; detail.textContent = `${request.peer?.url || 'adres yok'} · kod ${request.code}`;
+    info.append(title, detail);
+    const actions = document.createElement('div'); actions.className = 'peerActions';
+    actions.append(
+      peerAction('Onayla', async () => {
+        $('peerGlobalFeedback').textContent = 'Eşleştirme doğrulanıyor…';
+        await apiJson('/api/sync/pair/approve', jsonOptions('POST', { code: request.code }));
+        $('peerGlobalFeedback').textContent = 'Bilgisayar eklendi; ilk eşitleme başladı.';
+        await loadPeerSync();
+      }),
+      peerAction('Reddet', async () => {
+        const response = await apiFetch('/api/sync/pair/reject', jsonOptions('POST', { code: request.code }));
+        if (!response.ok) throw new Error(await response.text());
+        $('peerGlobalFeedback').textContent = 'Bağlantı isteği reddedildi.';
+        await loadPeerSync();
+      }, true),
+    );
+    row.append(dot, info, actions); pendingList.appendChild(row);
+  }
+
+  const peers = Array.isArray(status?.peers) ? status.peers : [];
+  const list = $('peerList'); list.replaceChildren();
+  if (!peers.length) {
+    const empty = document.createElement('div'); empty.className = 'peerDetail';
+    empty.textContent = status?.outgoingPairings
+      ? 'Diğer bilgisayarda onay bekleniyor…'
+      : 'Henüz ortak alan cihazı yok.';
+    list.appendChild(empty);
+  }
+  for (const peer of peers) {
+    const row = document.createElement('div'); row.className = 'peerRow';
+    const dot = document.createElement('span'); dot.className = `peerDot${peer.online ? ' online' : ''}`;
+    const info = document.createElement('div');
+    const title = document.createElement('div'); title.className = 'peerName';
+    title.textContent = `${peer.name || 'Bilgisayar'}${peer.paused ? ' · duraklatıldı' : ''}`;
+    const detail = document.createElement('div'); detail.className = 'peerDetail';
+    const state = peer.lastError ? `Bağlantı bekleniyor: ${peer.lastError}` : (peer.online ? 'çevrimiçi' : 'şu an çevrimdışı');
+    detail.textContent = `${peer.url || ''} · ${state} · son eşitleme ${peerTime(peer.lastSync)}`;
+    info.append(title, detail);
+    const actions = document.createElement('div'); actions.className = 'peerActions';
+    actions.append(
+      peerAction(peer.paused ? 'Sürdür' : 'Duraklat', async () => {
+        await apiJson('/api/sync/peer/pause', jsonOptions('POST', { id: peer.id, paused: !peer.paused }));
+        await loadPeerSync();
+      }),
+      peerAction('Kaldır', async () => {
+        if (!window.confirm(`${peer.name || 'Bu bilgisayar'} ile otomatik eşitleme bağlantısı kaldırılsın mı? Yerel notlar silinmez.`)) return;
+        const response = await apiFetch('/api/sync/peer/remove', jsonOptions('POST', { id: peer.id }));
+        if (!response.ok) throw new Error(await response.text());
+        $('peerGlobalFeedback').textContent = 'Cihaz bağlantısı kaldırıldı; iki taraftaki yerel notlar korundu.';
+        await loadPeerSync();
+      }, true),
+    );
+    if (sessionRole !== 'master') actions.querySelectorAll('button').forEach((button) => { button.disabled = true; });
+    row.append(dot, info, actions); list.appendChild(row);
+  }
+}
+async function loadPeerSync() {
+  if (peerSyncTimer) { clearTimeout(peerSyncTimer); peerSyncTimer = null; }
+  try {
+    const status = await apiJson('/api/sync/status');
+    renderPeerStatus(status);
+  } catch (error) {
+    $('peerGlobalFeedback').textContent = `Senkron durumu alınamadı: ${String(error.message || error)}`;
+  } finally {
+    if (currentView === 'sync') peerSyncTimer = setTimeout(loadPeerSync, 2500);
+  }
+}
+$('peerNameInput').value = navigator.platform || 'Bu bilgisayar';
+$('peerCodeBtn').onclick = async () => {
+  $('peerCodeBtn').disabled = true; $('peerCodeNote').textContent = 'Güvenli kod hazırlanıyor…';
+  try {
+    const result = await apiJson('/api/sync/pair/new', { method: 'POST' });
+    $('peerCode').textContent = result.code;
+    $('peerCode').style.display = 'block';
+    $('peerCodeNote').textContent = `Diğer bilgisayara adresi (${result.url}) ve bu kodu gir. Son adımda burada onay vereceksin.`;
+  } catch (error) { $('peerCodeNote').textContent = String(error.message || error); }
+  finally { $('peerCodeBtn').disabled = sessionRole !== 'master'; }
+};
+$('peerConnectBtn').onclick = async () => {
+  const address = $('peerAddress').value.trim();
+  const code = $('peerCodeInput').value.trim();
+  const deviceName = $('peerNameInput').value.trim() || 'Bu bilgisayar';
+  if (!address || !/^\d{6}$/.test(code)) { $('peerConnectFeedback').textContent = 'Diğer bilgisayarın adresini ve 6 haneli kodu gir.'; return; }
+  $('peerConnectBtn').disabled = true; $('peerConnectFeedback').textContent = 'Bağlantı isteği gönderiliyor…';
+  try {
+    await apiJson('/api/sync/pair/connect', jsonOptions('POST', { address, code, deviceName }));
+    $('peerConnectFeedback').textContent = 'İstek ulaştı. Şimdi diğer bilgisayarda “Onayla” düğmesine bas.';
+    $('peerCodeInput').value = '';
+    await loadPeerSync();
+  } catch (error) { $('peerConnectFeedback').textContent = String(error.message || error); }
+  finally { $('peerConnectBtn').disabled = sessionRole !== 'master'; }
+};
+$('peerSyncNow').onclick = async () => {
+  $('peerSyncNow').disabled = true; $('peerGlobalFeedback').textContent = 'Cihazlar yoklanıyor…';
+  try {
+    const result = await apiJson('/api/sync/now', { method: 'POST' });
+    const summaries = (result.results || []).filter(Boolean);
+    const changed = summaries.reduce((sum, item) => sum + (Number(item.applied) || 0) + (Number(item.deleted) || 0), 0);
+    const errors = summaries.filter((item) => item.error).length;
+    $('peerGlobalFeedback').textContent = errors
+      ? `${errors} cihaza şu an ulaşılamadı; otomatik olarak yeniden denenecek.`
+      : `Eşitleme tamamlandı${changed ? ` · ${changed} değişiklik alındı` : ' · her şey güncel'}.`;
+    renderPeerStatus(result.status || {});
+  } catch (error) { $('peerGlobalFeedback').textContent = String(error.message || error); }
+  finally { $('peerSyncNow').disabled = sessionRole !== 'master'; }
 };
 
 // --- eşleştirme: tek kullanımlık kod üret (parola İÇERMEZ) ---

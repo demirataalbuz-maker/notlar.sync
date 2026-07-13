@@ -6,6 +6,7 @@ set -u
 PORT=7799
 T=$(mktemp -d)
 mkdir -p "$T/NotlarSync/notes"
+mkdir -p "$T/tmp"
 mkdir -p "$T/Documents/Test Vault/.obsidian" "$T/Documents/Test Vault/Dersler" "$T/Documents/Test Vault/Assets"
 printf '{"password":"test123"}' > "$T/NotlarSync/app-config.json"
 printf -- '---\nname: Birinci\ndescription: "deneme notu aciklamasi"\n---\nMerhaba [[Ikinci Not]] iceriden selam' > "$T/NotlarSync/notes/Birinci.md"
@@ -14,7 +15,7 @@ printf '# Obsidian Kok\nAna not' > "$T/Documents/Test Vault/Kok.md"
 printf '# Ders\nGorsel: ![[Assets/test.png]]' > "$T/Documents/Test Vault/Dersler/Konu.md"
 printf 'PNG-test' > "$T/Documents/Test Vault/Assets/test.png"
 
-HOME="$T" PORT=$PORT NOTLAR_MOTOR="$T/motor-yok" NOTLAR_NO_RUNTIME_START=1 node "$(dirname "$0")/server.js" > "$T/server.log" 2>&1 &
+HOME="$T" TMPDIR="$T/tmp" PORT=$PORT NOTLAR_MOTOR="$T/motor-yok" NOTLAR_CLAUDE_BIN="$T/claude-yok" NOTLAR_CODEX_BIN="$T/codex-yok" NOTLAR_NO_RUNTIME_START=1 node "$(dirname "$0")/server.js" > "$T/server.log" 2>&1 &
 PID=$!
 trap 'kill $PID 2>/dev/null; rm -rf "$T"' EXIT
 for i in $(seq 1 20); do curl -s -o /dev/null "http://127.0.0.1:$PORT/" && break; sleep 0.3; done
@@ -78,7 +79,14 @@ kontrol "AI Beyni canli kodu sunulur" "loadBrainData" curl -s "$B/brain.js"
 kontrol "health parolasiz acilir" '"ok":true'      curl -s "$B/api/health"
 kontrol "port doluyken Electron sunucusu istemciye doner" "embedded-alive" env HOME="$T" PORT="$PORT" node -e "require('./server.js'); setTimeout(() => console.log('embedded-alive'), 100)"
 kontrol "parolasiz istek reddi"   "kimlik"         curl -s "$B/api/notes"
+kontrol "peer veri ucu token ister" "peer kimligi" curl -s "$B/api/sync/replica/changes"
 kontrol "not listesi"             "Birinci"        curl -s "$B/api/notes?$K"
+kontrol "peer sync durumu sunulur" '"device"'       curl -s -H "X-Api-Key: test123" "$B/api/sync/status"
+kontrol "Saldiri Avcisi durumu zarif" '"online"'   curl -s -H "X-Api-Key: test123" "$B/api/avci/status"
+kontrol "AI Konsey gecersiz ajani reddeder" "gecersiz ajan" curl -s -X POST -H "X-Api-Key: test123" -H "Content-Type: application/json" -d '{"agent":"root","message":"test"}' "$B/api/konsey"
+kontrol "AI Konsey model izin listesi" "modeli desteklenmiyor" curl -s -X POST -H "X-Api-Key: test123" -H "Content-Type: application/json" -d '{"agent":"claude","message":"test","claudeModel":"tehlikeli-model"}' "$B/api/konsey"
+kontrol "AI Konsey CLI yokken zarif cevap" "cevap veremedi" curl -s -X POST -H "X-Api-Key: test123" -H "Content-Type: application/json" -d '{"agent":"claude","message":"test"}' "$B/api/konsey"
+kontrol "AI Konsey gecici klasoru temizler" "temiz" bash -c "compgen -G '$T/tmp/notlar-konsey-*' >/dev/null || echo temiz"
 kontrol "not okuma"               "Merhaba"        curl -s "$B/api/note/Birinci?$K"
 kontrol "bozuk URL kodlamasi 400"  "gecersiz isim"  curl -s --path-as-is -H "X-Api-Key: test123" "$B/api/note/%"
 kontrol "not yazma"               "kaydedildi"     curl -s -X POST -d "yeni icerik" "$B/api/note/Yeni?$K"
@@ -258,6 +266,8 @@ kontrol "pair: cihaz sistem kurulumu yapamaz" "yalniz ana cihaz" curl -s -H "X-A
 kontrol "pair: cihaz yerel kasa tarayamaz" "yalniz ana cihaz" curl -s -H "X-Api-Key: ${TOKEN}" "$B/api/import/obsidian"
 kontrol "pair: cihaz fact gecersiz kilamaz" "yalniz ana cihaz" curl -s -X POST -H "X-Api-Key: ${TOKEN}" -H "Content-Type: application/json" -d '{}' "$B/api/memory/facts/$FACT_TWO_ID/invalidate"
 kontrol "pair: cihaz hard forget yapamaz" "yalniz ana cihaz" curl -s -X POST -H "X-Api-Key: ${TOKEN}" -H "Content-Type: application/json" -d '{"confirm":"KALICI OLARAK UNUT"}' "$B/api/memory/facts/$FACT_TWO_ID/forget-hard"
+kontrol "pair: cihaz host CLI Konseyini calistiramaz" "yalniz ana cihaz" curl -s -X POST -H "X-Api-Key: ${TOKEN}" -H "Content-Type: application/json" -d '{"agent":"claude","message":"test"}' "$B/api/konsey"
+kontrol "pair: cihaz peer topolojisini goremez" "yalniz ana cihaz" curl -s -H "X-Api-Key: ${TOKEN}" "$B/api/sync/status"
 kontrol "kasa: cihaz sifirlayamaz"      "yalniz ana cihaz" curl -s -X POST -H "X-Api-Key: ${TOKEN}" -H "Content-Type: application/json" -d '{"confirm":"SIFIRLA"}' "$B/api/vault/reset"
 kontrol "kasa: sifirlama acik onay ister" "SIFIRLA yaz" curl -s -X POST -H "X-Api-Key: test123" -H "Content-Type: application/json" -d '{}' "$B/api/vault/reset"
 kontrol "kasa: sifreli yedekle sifirlanir" '"ok":true' curl -s -X POST -H "X-Api-Key: test123" -H "Content-Type: application/json" -d '{"confirm":"SIFIRLA"}' "$B/api/vault/reset"
@@ -285,8 +295,11 @@ kontrol "hafiza durum dosyasi izni 600" "600" stat -c %a "$T/NotlarSync/memory/s
 kontrol "paket eslestirme modulunu icerir" "paket-tamam" node -e "const p=require('./package.json'); const f=p.build.files||[]; if(f.includes('eslestirme.js')) console.log('paket-tamam')"
 kontrol "paket kurulum ve import modullerini icerir" "paket-tamam" node -e "const p=require('./package.json'); const f=p.build.files||[]; if(f.includes('installer.js') && f.includes('obsidian.js')) console.log('paket-tamam')"
 kontrol "paket hafiza ve hook modullerini icerir" "paket-tamam" node -e "const p=require('./package.json'); const f=p.build.files||[]; if(f.includes('memory.js') && f.includes('temporal.js') && f.includes('integrations.js') && f.includes('agent-bridge.js')) console.log('paket-tamam')"
+kontrol "paket peer sync modulunu icerir" "paket-tamam" node -e "const p=require('./package.json'); const f=p.build.files||[]; if(f.includes('peer-sync.js')) console.log('paket-tamam')"
 kontrol "memory reliability cekirdek testleri" "memory-reliability: ok" node tests/memory-reliability.test.js
 kontrol "10k fact indeks dogrulugu" "scale-eval: ok" node olcum/memory-scale-eval.js --ci
+kontrol "peer sync cekirdek birlestirme" "peer-sync: ok" node tests/peer-sync.test.js
+kontrol "peer sync iki sunucu entegrasyonu" "peer-sync-integration: ok" node tests/peer-sync-integration.test.js
 
 echo
 echo "sonuc: $GECTI gecti, $KALDI kaldi"

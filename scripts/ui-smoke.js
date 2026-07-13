@@ -348,10 +348,10 @@ async function main() {
   await cdp.screenshot('desktop-note.png');
 
   stage('masaustu rotalari dogrulaniyor');
-  const views = ['tools', 'ai', 'document', 'runtime', 'sync', 'settings', 'vault'];
-  const viewElements = { tools: 'tools', ai: 'ai', document: 'documentView', runtime: 'runtimeView', sync: 'settings', settings: 'appSettings', vault: 'vault' };
+  const views = ['tools', 'ai', 'konsey', 'avci', 'document', 'runtime', 'sync', 'settings', 'vault'];
+  const viewElements = { tools: 'tools', ai: 'ai', konsey: 'konsey', avci: 'avci', document: 'documentView', runtime: 'runtimeView', sync: 'settings', settings: 'appSettings', vault: 'vault' };
   for (const view of views) {
-    await cdp.evaluate(`document.getElementById(${JSON.stringify({ tools: 'toolsBtn', ai: 'aiBtn', document: 'docBtn', runtime: 'runtimeBtn', sync: 'syncBtn', settings: 'setBtn', vault: 'vaultBtn' }[view])}).click()`);
+    await cdp.evaluate(`document.getElementById(${JSON.stringify({ tools: 'toolsBtn', ai: 'aiBtn', konsey: 'konseyBtn', avci: 'avciBtn', document: 'docBtn', runtime: 'runtimeBtn', sync: 'syncBtn', settings: 'setBtn', vault: 'vaultBtn' }[view])}).click()`);
     await sleep(180);
     const routeState = await cdp.evaluate(`(() => {
       const element = document.getElementById(${JSON.stringify(viewElements[view])});
@@ -361,10 +361,48 @@ async function main() {
       };
     })()`);
     if (!routeState.visible || routeState.overflow) throw new Error(`Route failed: ${view} ${JSON.stringify(routeState)}`);
+    if (view === 'konsey') await cdp.screenshot('desktop-konsey.png');
+    if (view === 'avci') await cdp.screenshot('desktop-avci.png');
+    if (view === 'sync') await cdp.screenshot('desktop-sync.png');
     if (view === 'settings') await cdp.screenshot('desktop-settings.png');
     if (view === 'runtime') await cdp.screenshot('desktop-runtime.png');
     if (view === 'vault') await cdp.screenshot('desktop-vault.png');
   }
+
+  stage('peer sync, Konsey ve Saldiri Avcisi yuzeyleri dogrulaniyor');
+  await cdp.evaluate(`showView('sync')`);
+  await cdp.waitFor(`document.getElementById('peerRevision').textContent !== 'rev 0' || document.getElementById('peerDeviceName').textContent !== 'bu cihaz'`);
+  const syncSurface = await cdp.evaluate(`({
+    codeButton: document.getElementById('peerCodeBtn').textContent,
+    connectButton: document.getElementById('peerConnectBtn').textContent,
+    status: document.getElementById('peerDeviceName').textContent,
+    overflow: document.getElementById('settings').scrollWidth > document.getElementById('settings').clientWidth + 1
+  })`);
+  if (!syncSurface.codeButton.includes('6 haneli') || !syncSurface.connectButton.includes('Bağlantı isteği')
+    || !syncSurface.status || syncSurface.overflow) throw new Error(`Peer sync surface failed: ${JSON.stringify(syncSurface)}`);
+
+  await cdp.evaluate(`showView('konsey')`);
+  const councilSurface = await cdp.evaluate(`({
+    notice: document.querySelector('#konsey .konseyNotice').textContent,
+    maxLength: document.getElementById('konseyInput').maxLength,
+    claudeModels: document.getElementById('konseyClaudeModel').options.length,
+    codexModels: document.getElementById('konseyCodexModel').options.length
+  })`);
+  if (!councilSurface.notice.includes('bulut sağlayıcı') || councilSurface.maxLength !== 20000
+    || councilSurface.claudeModels < 4 || councilSurface.codexModels < 3) throw new Error(`Konsey surface failed: ${JSON.stringify(councilSurface)}`);
+
+  await cdp.evaluate(`showView('avci')`);
+  await cdp.waitFor(`document.getElementById('avciBadge').textContent !== 'kontrol ediliyor'`, 8000);
+  const hunterSurface = await cdp.evaluate(`({
+    badge: document.getElementById('avciBadge').textContent,
+    stateVisible: getComputedStyle(document.getElementById('avciState')).display !== 'none',
+    frameReady: document.getElementById('avciFrame').classList.contains('ready'),
+    retry: document.getElementById('avciRetry').textContent,
+    overflow: document.getElementById('avci').scrollWidth > document.getElementById('avci').clientWidth + 1
+  })`);
+  if ((!hunterSurface.stateVisible && !hunterSurface.frameReady) || hunterSurface.badge === 'kontrol ediliyor'
+    || hunterSurface.retry !== 'Yeniden dene' || hunterSurface.overflow) throw new Error(`Avci surface failed: ${JSON.stringify(hunterSurface)}`);
+  await cdp.evaluate(`showView('vault')`);
 
   stage('sifre kasasi dogrulaniyor');
   await cdp.waitFor(`vLoadReady === true`);
@@ -643,12 +681,12 @@ async function main() {
   await cdp.evaluate(`document.getElementById('mapFrame').contentDocument.querySelector('#brainDialog .brain-dialog-head button').click()`);
 
   stage('mobil rotalar dogrulaniyor');
-  const mobileViews = ['overview', 'vault', 'tools', 'ai', 'document', 'runtime', 'sync', 'settings'];
+  const mobileViews = ['overview', 'vault', 'tools', 'ai', 'konsey', 'avci', 'document', 'runtime', 'sync', 'settings'];
   for (const view of mobileViews) {
     await cdp.evaluate(`showView(${JSON.stringify(view)})`);
     await sleep(160);
     const state = await cdp.evaluate(`(() => {
-      const ids = { overview:'overviewView', vault:'vault', tools:'tools', ai:'ai', document:'documentView', runtime:'runtimeView', sync:'settings', settings:'appSettings' };
+      const ids = { overview:'overviewView', vault:'vault', tools:'tools', ai:'ai', konsey:'konsey', avci:'avci', document:'documentView', runtime:'runtimeView', sync:'settings', settings:'appSettings' };
       const element = document.getElementById(ids[${JSON.stringify(view)}]);
       return { view: document.body.dataset.view, overflow: element.scrollWidth > element.clientWidth + 1 };
     })()`);
@@ -671,6 +709,8 @@ async function main() {
       pairClaim: async () => ({ claimId: 'test' }),
       pairApprove: async () => ({}),
       pairStatus: async () => ({ durum: 'bekliyor' }),
+      peerConnect: async () => ({ status: 'approval-required' }),
+      peerStatus: async () => ({ peers: [] }),
       openUrl: async () => true,
       installTailscale: async () => ({ ok: true }),
       tailscaleUp: async () => ({ started: true }),

@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('setupApi', Object.freeze({
   pairClaim: (data) => ipcRenderer.invoke('setup:pair-claim', data),
   pairApprove: (data) => ipcRenderer.invoke('setup:pair-approve', data),
   pairStatus: (data) => ipcRenderer.invoke('setup:pair-status', data),
+  peerConnect: (data) => ipcRenderer.invoke('setup:peer-connect', data),
+  peerStatus: () => ipcRenderer.invoke('setup:peer-status'),
   openUrl: (url) => ipcRenderer.invoke('setup:open-url', url),
   installTailscale: () => ipcRenderer.invoke('setup:install-tailscale'),
   tailscaleUp: () => ipcRenderer.invoke('setup:tailscale-up'),

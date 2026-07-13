@@ -1,7 +1,7 @@
 // Notlar Sync - masaustu uygulamasi (Electron)
 // app-config.json (~/NotlarSync/):
-//   mode: "host"   -> sunucuyu bu uygulamanin icinde baslatir (masaustu PC)
-//   mode: "client" -> sadece baglanir, "server" adresini kullanir (laptop)
+//   mode: "host"   -> yerel kopyayi ve sunucuyu bu uygulamanin icinde baslatir
+//   mode: "client" -> geriye uyumlu uzak istemci; yeni eslestirmeler host/peer kalir
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const { execFile } = require('child_process');
 const path = require('path');
@@ -139,6 +139,17 @@ ipcMain.handle('setup:pair-approve', (_event, data) => pairRequest(data.address,
 }));
 ipcMain.handle('setup:pair-status', (_event, data) => pairRequest(data.address,
   `/api/pair/durum?kod=${encodeURIComponent(data.code)}&claimId=${encodeURIComponent(data.claimId)}`));
+// Yeni kurulum akisi: diger sunucuya donusmek yerine bu bilgisayarin kendi
+// yerel replikasini peer olarak baglar. Yerel ana parola cihazda kalir.
+const localServerUrl = `http://127.0.0.1:${hostPort}`;
+const localAuthHeaders = () => ({ 'Content-Type': 'application/json', 'X-Api-Key': String(config.password || '') });
+ipcMain.handle('setup:peer-connect', (_event, data) => pairRequest(localServerUrl, '/api/sync/pair/connect', {
+  method: 'POST', headers: localAuthHeaders(),
+  body: JSON.stringify({ address: data.address, code: data.code, deviceName: data.deviceName }),
+}));
+ipcMain.handle('setup:peer-status', () => pairRequest(localServerUrl, '/api/sync/status', {
+  headers: { 'X-Api-Key': String(config.password || '') },
+}));
 ipcMain.handle('setup:open-url', (_event, value) => {
   const url = new URL(value);
   if (url.protocol !== 'https:' || !['tailscale.com', 'login.tailscale.com'].includes(url.hostname)) throw new Error('Adres engellendi');

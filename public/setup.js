@@ -25,18 +25,20 @@ $('baglanBtn').onclick = async () => {
   if (!/^\d{6}$/.test(code)) { $('pairErr').textContent = 'Kod 6 haneli olmali.'; return; }
   $('baglanBtn').disabled = true;
   try {
-    const claim = await api.pairClaim({ address, code, deviceName });
-    await api.pairApprove({ address, code, claimId: claim.claimId });
-    $('pairDurum').textContent = 'Bu cihaz onaylandi. Ana cihazdaki onay bekleniyor...';
+    if (typeof api.peerConnect !== 'function' || typeof api.peerStatus !== 'function')
+      throw new Error('Bu kurulum surumu yerel peer eslestirmesini desteklemiyor');
+    await api.peerConnect({ address, code, deviceName });
+    $('pairDurum').textContent = 'Istek ulasti. Diger bilgisayarda Onayla dugmesine bas...';
     clearInterval(pollTimer);
+    const startedAt = Date.now();
     pollTimer = setInterval(async () => {
       try {
-        const state = await api.pairStatus({ address, code, claimId: claim.claimId });
-        if (state.durum === 'onaylandi' && state.token) {
+        const state = await api.peerStatus();
+        if (Array.isArray(state.peers) && state.peers.length) {
           clearInterval(pollTimer);
-          $('pairDurum').textContent = 'Eslestirme tamamlandi. Baglaniliyor...';
-          await finish({ mode: 'client', server: address, password: state.token });
-        } else if (state.durum === 'yok') {
+          $('pairDurum').textContent = 'Eslestirme tamamlandi. Ilk yerel kopya aliniyor...';
+          await finish({ mode: 'host' });
+        } else if (Date.now() - startedAt > 190000) {
           clearInterval(pollTimer);
           $('baglanBtn').disabled = false;
           $('pairErr').textContent = 'Kodun suresi gecti veya eslestirme iptal edildi.';
