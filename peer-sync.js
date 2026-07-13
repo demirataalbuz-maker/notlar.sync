@@ -367,14 +367,23 @@ function createReplica(options = {}) {
   function scan() {
     const existing = new Set(walkNotes(notesDir));
     let changed = false;
+    let skipped = 0;
     for (const name of existing) {
-      const content = readContent(name);
+      // Okunamayan/normalize edilemeyen tek bir not tum taramayi (ve server'i) cokertmesin.
+      let content;
+      try {
+        content = readContent(name);
+      } catch (error) {
+        skipped++;
+        continue;
+      }
       const current = state.notes[name];
       const hash = hashContent(content);
       if (current && !current.deleted && current.hash === hash) continue;
       localRecord(name, false, content, false);
       changed = true;
     }
+    if (skipped) console.warn(`[peer-sync] ${skipped} not okunamadi, atlandi (ad normalize degil olabilir)`);
     for (const [name, record] of Object.entries(state.notes)) {
       if (record.deleted || existing.has(name)) continue;
       localRecord(name, true, '', false);
