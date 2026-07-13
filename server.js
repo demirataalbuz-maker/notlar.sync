@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { WebSocketServer } = require('ws');
 const { buildGraph, buildReport, explainNode, shortestPath, normName } = require('./graph');
 const zihin = require('./zihin');
@@ -815,6 +815,68 @@ function readBody(req, cb) {
   });
 }
 
+// ---- AI KONSEY: yerel CLI ajanlarini calistir (claude -p / codex exec) ----
+// AI URETMEZ bir sey; kullanicinin GIRIS YAPMIS CLI'lari birbiriyle konusur.
+// Her cagride tum transcript prompt'a gomulur (CLI'lar hafizasiz) -> oturum-ici hatirlama.
+// PATH'i genislet: codex node'un bin dizininde (process.execPath yani), claude ~/.local/bin'de.
+const KONSEY_ENV = {
+  ...process.env,
+  PATH: [
+    path.dirname(process.execPath),
+    path.join(require('os').homedir(), '.local/bin'),
+    path.join(require('os').homedir(), '.npm-global/bin'),
+    process.env.PATH || '',
+  ].join(':'),
+};
+function konseyPrompt(isim, soru, transcript) {
+  return (
+    `Sen '${isim}' adli bir yapay zekasin ve bir kanalda bir insan ile baska bir yapay zeka ` +
+    `ile birliktesin; hepiniz ayni gecmisi goruyorsunuz. Turkce, net ve oz konus. Digerinin ` +
+    `dediklerine ya KATIL ya KARSI CIK, sebebini soyle. Kendini tekrarlama.\n\n` +
+    `SIMDIYE KADARKI KONUSMA:\n${transcript || '(ilk konusan sensin)'}\n\n` +
+    `KULLANICININ YENI MESAJI:\n${soru}\n\nSira sende, cevabini yaz.`
+  );
+}
+// spawn + stdin KAPALI (stdio 'ignore'): CLI'lar TTY/stdin beklemesin -> yoksa takilir.
+function cliCalistir(cmd, args, cb) {
+  let out = '', err = '', bitti = false;
+  const done = (e) => { if (bitti) return; bitti = true; clearTimeout(t); cb(e, out, err); };
+  let child;
+  try {
+    child = spawn(cmd, args, { env: KONSEY_ENV, stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (e) { return cb(e, '', ''); }
+  const t = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* yok */ } done(new Error('zaman asimi (600s)')); }, 600000);
+  child.stdout.on('data', (d) => { out += d; });
+  child.stderr.on('data', (d) => { err += d; });
+  child.on('error', (e) => done(e));
+  child.on('close', () => done(null));
+}
+// model bos/"varsayilan" ise bayrak eklenmez -> CLI kendi config default'unu kullanir.
+function temizModel(m) {
+  m = String(m || '').trim();
+  return (m && m.toLowerCase() !== 'varsayilan' && /^[\w.:-]+$/.test(m)) ? m : '';
+}
+function claudeCalistir(prompt, model, cb) {
+  const m = temizModel(model);
+  const args = m ? ['--model', m, '-p', prompt] : ['-p', prompt];
+  cliCalistir('claude', args, (err, out, serr) => {
+    if (err && !out) return cb(`(claude cevap veremedi: ${String(serr || err.message).slice(0, 200)})`);
+    cb(String(out || '').trim() || '(claude bos yanit dondurdu)');
+  });
+}
+function codexCalistir(prompt, model, cb) {
+  const m = temizModel(model);
+  const tmp = path.join(require('os').tmpdir(), `konsey-${Date.now()}-${Math.floor(Math.random() * 1e9)}.txt`);
+  const args = m ? ['exec', '-m', m, '--output-last-message', tmp, prompt] : ['exec', '--output-last-message', tmp, prompt];
+  cliCalistir('codex', args, (err, out, serr) => {
+    let ans = '';
+    try { ans = fs.readFileSync(tmp, 'utf8').trim(); } catch { /* yok */ }
+    try { fs.unlinkSync(tmp); } catch { /* yok */ }
+    if (!ans && err) return cb(`(codex cevap veremedi: ${String(serr || err.message).slice(0, 200)})`);
+    cb(ans || String(out || '').trim() || '(codex bos yanit dondurdu)');
+  });
+}
+
 // host'un baglanti adresi: once tailscale (100.x) IP, yoksa LAN IP
 function getHostAddress(cb) {
   execFile('tailscale', ['ip', '-4'], (e, out) => {
@@ -997,6 +1059,35 @@ function handleApi(req, res, url) {
     broadcast({ type: 'memory', kind, id });
     fireWebhook('hafiza-guncellendi', `${kind}:${id || ''}`);
   };
+
+  // AI KONSEY: komutla (/claude /codex /all) yerel CLI ajanlarini konustur.
+  // Sadece bu bilgisayardan (localOnly) — CLI'lar host makinede.
+  if (url.pathname === '/api/konsey' && req.method === 'POST') {
+    if (!localOnly()) return;
+    return readBody(req, (err, body) => {
+      if (err) return txt(400, err);
+      const agent = String((body && body.agent) || 'all').toLowerCase();
+      const message = String((body && body.message) || '').trim();
+      const transcript = String((body && body.transcript) || '');
+      const claudeModel = (body && body.claudeModel) || '';
+      const codexModel = (body && body.codexModel) || '';
+      if (!message) return txt(400, 'mesaj bos');
+      const hedefler = agent === 'claude' ? ['Claude'] : agent === 'codex' ? ['Codex'] : ['Claude', 'Codex'];
+      const replies = [];
+      let kalan = hedefler.length;
+      hedefler.forEach((isim) => {
+        const runner = isim === 'Codex' ? codexCalistir : claudeCalistir;
+        const model = isim === 'Codex' ? codexModel : claudeModel;
+        runner(konseyPrompt(isim, message, transcript), model, (text) => {
+          replies.push({ name: isim, text });
+          if (--kalan === 0) {
+            replies.sort((a, b) => hedefler.indexOf(a.name) - hedefler.indexOf(b.name));
+            txt(200, JSON.stringify({ replies }), 'application/json');
+          }
+        });
+      });
+    });
+  }
 
   if (url.pathname === '/api/session' && req.method === 'GET') {
     const credential = keyOf(req, url);
@@ -1928,7 +2019,7 @@ const server = http.createServer((req, res) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   if (!['/graphify', '/graphify/', '/pano', '/pano/'].includes(url.pathname))
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ws: wss:; frame-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ws: wss:; frame-src 'self' http://127.0.0.1:7788 http://localhost:7788; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'");
   if (url.pathname === '/api/health') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ app: 'notlar-sync', ok: true, version: APP_VERSION }));

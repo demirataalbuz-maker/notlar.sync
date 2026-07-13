@@ -409,6 +409,8 @@
   body[data-view="vault"] #vault,
   body[data-view="tools"] #tools,
   body[data-view="ai"] #ai,
+  body[data-view="konsey"] #konsey,
+  body[data-view="avci"] #avci,
   body[data-view="document"] #documentView,
   body[data-view="runtime"] #runtimeView,
   body[data-view="sync"] #settings,
@@ -671,6 +673,8 @@
     <symbol id="app-settings" viewBox="0 0 24 24"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4A2 2 0 0 0 4 9.9l.2.1a2 2 0 0 1 1 1.7v.6a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.6a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="app-menu" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
     <symbol id="app-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="app-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 7.6 7 9 4-1.4 7-4.5 7-9V6Z"/></symbol>
+    <symbol id="app-council" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.3L3 21l1.3-3.5A8.4 8.4 0 1 1 21 11.5Z"/><path d="M8 10h8M8 13.5h5"/></symbol>
   </svg>
   <div id="login" style="display:none">
     <div id="loginMark">NS</div>
@@ -687,6 +691,8 @@
     <button id="vaultBtn" class="railBtn" aria-label="Şifre Kasası" title="Şifre Kasası"><svg class="appIcon"><use href="#app-lock"/></svg></button>
     <button id="toolsBtn" class="railBtn" aria-label="Kodlama Araçları" title="Kodlama Araçları"><svg class="appIcon"><use href="#app-tool"/></svg></button>
     <button id="aiBtn" class="railBtn" aria-label="Yerel AI" title="Yerel AI"><svg class="appIcon"><use href="#app-spark"/></svg></button>
+    <button id="konseyBtn" class="railBtn" aria-label="AI Konsey" title="AI Konsey"><svg class="appIcon"><use href="#app-council"/></svg></button>
+    <button id="avciBtn" class="railBtn" aria-label="AI Saldırı Avcısı" title="AI Saldırı Avcısı"><svg class="appIcon"><use href="#app-shield"/></svg></button>
     <button id="docBtn" class="railBtn" aria-label="Belge Ekle" title="Belge Ekle"><svg class="appIcon"><use href="#app-upload"/></svg></button>
     <button id="runtimeBtn" class="railBtn" aria-label="Kurulum Merkezi" title="Kurulum Merkezi"><svg class="appIcon"><use href="#app-download"/></svg></button>
     <button id="syncBtn" class="railBtn" aria-label="Senkron ve Cihazlar" title="Senkron ve Cihazlar"><svg class="appIcon"><use href="#app-sync"/></svg></button>
@@ -816,6 +822,37 @@
       <div id="runtimeList" class="runtimeList"></div>
       <div id="runtimeTask" style="display:none;margin-top:22px"><div class="sectionHeader"><h3 id="runtimeStep">Hazırlanıyor</h3><span id="runtimePercent" class="statusPill info">0%</span></div><div class="runtimeProgress"><span id="runtimeProgressBar"></span></div><pre id="runtimeLog"></pre></div>
       <section class="settingsSection" style="margin-top:28px"><div class="sectionHeader"><h3>Obsidian kasalarını içe aktar</h3><button id="obsidianRefresh" class="textBtn">Yeniden tara</button></div><div id="obsidianVaults"></div><div id="obsidianFeedback" style="font-size:12px;color:var(--muted);min-height:18px;margin-top:8px"></div></section>
+    </div>
+  </section>
+
+  <style>
+    #avciFrame { border: none; width: 100%; height: 100%; flex: 1; min-height: 0; background: var(--bg); }
+    #konsey .featureBody { display: flex; flex-direction: column; flex: 1; gap: 0; padding: 0; margin: 0; max-width: none; min-height: 0; }
+    .konseyLog { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+    .konseyMsg { max-width: 760px; border-radius: 12px; padding: 10px 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .konseyMsg .who { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 4px; opacity: .7; }
+    .konseyMsg.sen { align-self: flex-end; background: var(--accent); color: #111116; }
+    .konseyMsg.claude, .konseyMsg.codex { align-self: flex-start; background: var(--panel2, #1a1a22); border: 1px solid var(--line, #2a2a34); }
+    .konseyMsg.sys { align-self: center; font-size: 12px; opacity: .6; }
+    .konseyBar { border-top: 1px solid var(--line, #2a2a34); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .konseyCmds { display: flex; gap: 6px; flex-wrap: wrap; }
+    .konseyInputRow { display: flex; gap: 8px; align-items: flex-end; }
+    .konseyInputRow textarea { flex: 1; resize: none; }
+    .konseyModelSel { font-size: 12px; padding: 4px 7px; border-radius: 7px; max-width: 165px; }
+  </style>
+
+  <section id="avci" class="featureView" aria-label="AI Saldırı Avcısı">
+    <iframe id="avciFrame" title="AI Saldırı Avcısı"></iframe>
+  </section>
+
+  <section id="konsey" class="featureView" aria-label="AI Konsey">
+    <header class="featureTopbar"><h1>AI Konsey</h1><p>Claude ve Codex'i komutlarla konuştur · <b>/claude</b> · <b>/codex</b> · <b>/all</b></p><span class="spacer"></span><select id="konseyClaudeModel" class="konseyModelSel" title="Claude modeli"><option value="">Claude: varsayılan</option><option value="opus">Claude: opus</option><option value="sonnet">Claude: sonnet</option><option value="haiku">Claude: haiku</option><option value="fable">Claude: fable</option></select><select id="konseyCodexModel" class="konseyModelSel" title="Codex modeli"><option value="">Codex: varsayılan</option><option value="gpt-5.5">Codex: gpt-5.5</option><option value="gpt-5-codex">Codex: gpt-5-codex</option><option value="o3">Codex: o3</option></select><button id="konseySave" class="miniBtn">Nota kaydet</button><button id="konseyClear" class="miniBtn">Temizle</button></header>
+    <div class="featureBody">
+      <div id="konseyLog" class="konseyLog"></div>
+      <div class="konseyBar">
+        <div class="konseyCmds"><button class="miniBtn" data-cmd="/all ">/all</button><button class="miniBtn" data-cmd="/claude ">/claude</button><button class="miniBtn" data-cmd="/codex ">/codex</button></div>
+        <div class="konseyInputRow"><textarea id="konseyInput" rows="2" placeholder="/all mesajın…  (Enter gönder · Shift+Enter yeni satır)"></textarea><button id="konseySend" class="sBtn">Gönder</button></div>
+      </div>
     </div>
   </section>
 
@@ -1342,7 +1379,8 @@ $('editor').addEventListener('input', () => {
 // --- gorunum yonlendiricisi: her ana yetenek kendi tam sayfasinda ---
 const VIEW_BUTTONS = {
   overview: 'railLogo', notes: 'notesBtn', map: 'mapBtn', vault: 'vaultBtn',
-  tools: 'toolsBtn', ai: 'aiBtn', document: 'docBtn', runtime: 'runtimeBtn',
+  tools: 'toolsBtn', ai: 'aiBtn', konsey: 'konseyBtn', avci: 'avciBtn',
+  document: 'docBtn', runtime: 'runtimeBtn',
   sync: 'syncBtn', settings: 'setBtn',
 };
 let currentView = 'overview';
@@ -1617,6 +1655,7 @@ async function showView(view) {
   if (!VIEW_BUTTONS[view]) view = 'overview';
   if (currentView === 'vault' && view !== 'vault') lockVault();
   if (currentView === 'map' && view !== 'map') $('mapFrame').src = 'about:blank';
+  if (currentView === 'avci' && view !== 'avci') $('avciFrame').src = 'about:blank';
   currentView = view;
   document.body.dataset.view = view;
   Object.entries(VIEW_BUTTONS).forEach(([name, id]) => $(id).classList.toggle('active', name === view));
@@ -1631,6 +1670,10 @@ async function showView(view) {
     await apiFetch('/api/session').catch(() => {});
     $('mapFrame').src = 'brain.html?embed=1';
   }
+  if (view === 'avci' && (!$('avciFrame').getAttribute('src') || $('avciFrame').getAttribute('src') === 'about:blank')) {
+    $('avciFrame').src = 'http://127.0.0.1:7788/';
+  }
+  if (view === 'konsey') konseyInit();
   if (view === 'vault') openVault();
   if (view === 'ai') loadAiStatus();
   if (view === 'document') loadMotorStatus();
@@ -1646,6 +1689,85 @@ $('mapBtn').onclick = () => showView('map');
 $('vaultBtn').onclick = () => showView('vault');
 $('toolsBtn').onclick = () => showView('tools');
 $('aiBtn').onclick = () => showView('ai');
+$('konseyBtn').onclick = () => showView('konsey');
+$('avciBtn').onclick = () => showView('avci');
+
+// ===== AI KONSEY: komut-gudumlu cok-ajanli sohbet (Claude + Codex, yerel CLI) =====
+let konseyTranscript = '';
+let konseyBusy = false;
+let konseyReady = false;
+function konseyInit() {
+  if (konseyReady) return;
+  konseyReady = true;
+  const inp = $('konseyInput');
+  $('konseySend').onclick = konseyGonder;
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); konseyGonder(); }
+  });
+  document.querySelectorAll('#konsey .konseyCmds [data-cmd]').forEach((b) => {
+    b.onclick = () => { inp.value = b.dataset.cmd + inp.value.replace(/^\/(claude|codex|all)\s*/i, ''); inp.focus(); };
+  });
+  $('konseyClear').onclick = () => {
+    if (konseyBusy) return;
+    konseyTranscript = '';
+    $('konseyLog').innerHTML = '';
+    konseyMsg('sys', '', 'Sohbet temizlendi — yeni konu.');
+  };
+  $('konseySave').onclick = konseyKaydet;
+  if (!$('konseyLog').children.length)
+    konseyMsg('sys', '', 'Komutla başla:  /all <mesaj>  ·  /claude <mesaj>  ·  /codex <mesaj>');
+}
+function konseyMsg(cls, who, text) {
+  const div = document.createElement('div');
+  div.className = 'konseyMsg ' + cls;
+  if (who) { const w = document.createElement('div'); w.className = 'who'; w.textContent = who; div.appendChild(w); }
+  const body = document.createElement('div'); body.textContent = text; div.appendChild(body);
+  const log = $('konseyLog');
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div;
+}
+async function konseyGonder() {
+  if (konseyBusy) return;
+  const raw = $('konseyInput').value.trim();
+  if (!raw) return;
+  let agent = 'all', message = raw;
+  const m = raw.match(/^\/(claude|codex|all)\s+([\s\S]+)/i);
+  if (m) { agent = m[1].toLowerCase(); message = m[2].trim(); }
+  else if (/^\/(claude|codex|all)\s*$/i.test(raw)) { konseyMsg('sys', '', 'Komuttan sonra bir mesaj yaz.'); return; }
+  $('konseyInput').value = '';
+  konseyMsg('sen', 'Sen', (m ? '/' + agent + ' ' : '') + message);
+  konseyTranscript += `\n[SEN]: ${message}\n`;
+  konseyBusy = true;
+  $('konseySend').disabled = true;
+  const bekle = konseyMsg('sys', '', (agent === 'all' ? 'Claude + Codex' : agent) + ' düşünüyor…');
+  try {
+    const claudeModel = ($('konseyClaudeModel') || {}).value || '';
+    const codexModel = ($('konseyCodexModel') || {}).value || '';
+    const res = await apiJson('/api/konsey', jsonOptions('POST', { agent, message, transcript: konseyTranscript, claudeModel, codexModel }));
+    bekle.remove();
+    for (const r of (res.replies || [])) {
+      konseyMsg(r.name.toLowerCase(), r.name, r.text);
+      konseyTranscript += `\n[${r.name.toUpperCase()}]: ${r.text}\n`;
+    }
+  } catch (e) {
+    bekle.remove();
+    konseyMsg('sys', '', 'Hata: ' + (e.message || e));
+  } finally {
+    konseyBusy = false;
+    $('konseySend').disabled = false;
+    $('konseyInput').focus();
+  }
+}
+async function konseyKaydet() {
+  if (!konseyTranscript.trim()) { konseyMsg('sys', '', 'Kaydedilecek sohbet yok.'); return; }
+  const isim = 'AI-Konsey-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  try {
+    const r = await apiFetch('/api/note/' + encodeURIComponent(isim), { method: 'POST', body: '# ' + isim + '\n' + konseyTranscript });
+    if (!r.ok) throw new Error(await r.text());
+    konseyMsg('sys', '', '💾 Nota kaydedildi: ' + isim);
+  } catch (e) { konseyMsg('sys', '', 'Kaydedilemedi: ' + (e.message || e)); }
+}
 $('docBtn').onclick = () => showView('document');
 $('runtimeBtn').onclick = () => showView('runtime');
 $('syncBtn').onclick = () => showView('sync');
