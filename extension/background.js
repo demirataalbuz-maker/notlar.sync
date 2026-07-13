@@ -4,12 +4,16 @@
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type !== 'save') return;
   chrome.storage.local.get({ host: 'http://localhost:7777', key: '' }, (cfg) => {
-    const q = cfg.key ? '?key=' + encodeURIComponent(cfg.key) : '';
-    fetch(cfg.host.replace(/\/$/, '') + '/api/vault-pending' + q, {
+    const headers = { 'Content-Type': 'application/json' };
+    if (cfg.key) headers['X-Api-Key'] = cfg.key;
+    fetch(cfg.host.replace(/\/$/, '') + '/api/vault-pending', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(msg.cred),
-    }).then(() => sendResponse({ ok: true }))
+    }).then(async (response) => {
+      if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+      sendResponse({ ok: true });
+    })
       .catch((e) => sendResponse({ ok: false, err: String(e) }));
   });
   return true; // async yanit

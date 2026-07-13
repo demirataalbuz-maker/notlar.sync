@@ -96,7 +96,20 @@ function detectCommunities(ids, edges) {
   return out;
 }
 
-// notes dizinini tarayip {nodes, edges, communities} grafi dondurur.
+function markdownFiles(dir, prefix = '') {
+  const files = [];
+  let entries = [];
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return files; }
+  for (const entry of entries) {
+    if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue;
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) files.push(...markdownFiles(path.join(dir, entry.name), relative));
+    else if (entry.isFile() && entry.name.endsWith('.md')) files.push(relative);
+  }
+  return files;
+}
+
+// notes dizinini alt klasorleriyle tarayip {nodes, edges, communities} grafi dondurur.
 // Dugum anahtari normalize isimdir; ayni ada cikan yazim farklari birlesir.
 // kategori -> harita "top"u (hub) etiketi/emojisi. Bilinmeyen kategori kendi adiyla gecer.
 const KATEGORI_TOP = {
@@ -108,21 +121,19 @@ const KATEGORI_TOP = {
 };
 
 function buildGraph(notesDir, { hideHidden = false, kategoriHub = false, sadeceKategori = false } = {}) {
-  let files = [];
-  try {
-    files = fs.readdirSync(notesDir).filter((f) => f.endsWith('.md')).sort();
-  } catch { return { nodes: [], edges: [], communities: [] }; }
+  const files = markdownFiles(notesDir).sort();
 
   const nodes = new Map(); // normId -> dugum
   const rawEdges = [];     // [normKaynak, {t, rel}]
 
   for (const f of files) {
     const stem = f.slice(0, -3);
-    if (hideHidden && /^AI-Hafiza/i.test(stem)) continue; // ayarlar'daki gizleme ile ayni mantik
+    const basename = path.posix.basename(stem);
+    if (hideHidden && /^AI-Hafiza/i.test(basename)) continue; // ayarlar'daki gizleme ile ayni mantik
     let text = '';
-    try { text = fs.readFileSync(path.join(notesDir, f), 'utf8'); } catch { continue; }
+    try { text = fs.readFileSync(path.join(notesDir, ...f.split('/')), 'utf8'); } catch { continue; }
     const { meta, body } = parseFrontmatter(text);
-    const label = meta.name || stem;
+    const label = meta.name || basename;
     const id = normName(label);
     nodes.set(id, {
       id, label, type: meta.type || 'not',

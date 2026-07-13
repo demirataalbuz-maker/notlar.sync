@@ -2,6 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Notlar Sync — Kurulum</title>
 <style>
   :root { --bg1:#1e1e1e; --bg2:#262626; --border:#3f3f3f; --text:#dadada; --muted:#999; --accent:#7f6df2; }
@@ -9,9 +10,10 @@
   body {
     background: var(--bg1); color: var(--text);
     font-family: 'Segoe UI', Ubuntu, sans-serif;
-    height: 100vh; display:flex; align-items:center; justify-content:center;
+    min-height:100vh; display:flex; align-items:flex-start; justify-content:center;
+    overflow:auto; padding:16px 0;
   }
-  #card { width: 480px; text-align:center; display:flex; flex-direction:column; gap:16px; }
+  #card { width:480px; max-width:calc(100vw - 32px); text-align:center; display:flex; flex-direction:column; gap:12px; }
   h1 { font-size:20px; }
   p  { font-size:14px; color:var(--muted); line-height:1.6; }
   .btn {
@@ -52,160 +54,13 @@
     <p style="margin-bottom:8px">Zaten bir ana cihazın mı var? Oradan <b>Ayarlar → Başka cihaz eşleştir</b> ile <b>6 haneli kod</b> üret, aşağıya gir:</p>
     <input id="adres" placeholder="Ana cihaz adresi (örn. http://100.x.x.x:7777)" style="width:100%;background:#262626;border:1px solid #3f3f3f;color:#dadada;border-radius:7px;padding:9px;margin-bottom:8px;outline:none">
     <input id="cihazAd" placeholder="Bu cihazın adı (örn. Dizüstü)" style="width:100%;background:#262626;border:1px solid #3f3f3f;color:#dadada;border-radius:7px;padding:9px;margin-bottom:8px;outline:none">
-    <input id="kod" placeholder="6 haneli kod" inputmode="numeric" maxlength="6" style="width:100%;background:#262626;border:1px solid #3f3f3f;color:#dadada;border-radius:7px;padding:9px;font-family:monospace;font-size:18px;letter-spacing:4px;text-align:center;margin-bottom:8px;outline:none">
+    <input id="kod" placeholder="6 haneli kod" inputmode="numeric" maxlength="6" style="width:100%;background:#262626;border:1px solid #3f3f3f;color:#dadada;border-radius:7px;padding:9px;font-family:monospace;font-size:18px;letter-spacing:0;text-align:center;margin-bottom:8px;outline:none">
     <button class="btn" id="baglanBtn">Eşleştir</button>
     <div id="pairDurum" style="font-size:13px;min-height:16px;margin-top:8px;color:var(--muted)"></div>
     <div id="pairErr" style="color:#e74c3c;font-size:13px;min-height:16px"></div>
   </div>
 </div>
 
-<script>
-const { execFile, exec } = require('child_process');
-const fs = require('fs');
-const os = require('os');
-const { ipcRenderer } = require('electron');
-
-const q = new URLSearchParams(location.search);
-const CONFIG_PATH = q.get('config');
-const $ = (id) => document.getElementById(id);
-let busy = false;
-
-function openUrl(u) {
-  const cmd = process.platform === 'win32' ? 'start ""' : process.platform === 'darwin' ? 'open' : 'xdg-open';
-  exec(cmd + ' "' + u + '"');
-}
-
-function patchConfig(fn) {
-  let c = {};
-  try { c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch {}
-  fn(c);
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2));
-}
-function bitti() { patchConfig((c) => { c.setupDone = true; }); ipcRenderer.send('setup-done'); }
-
-$('atla').onclick = () => {
-  patchConfig((c) => { c.tailscaleSkip = true; }); // bir daha sorma; fikrin degisirse config'den sil
-  bitti();
-};
-
-// Tek kullanımlık kod + çift onay + token akışı:
-// 1) kodu ana cihaza gönder (claim) -> claimId al
-// 2) bu cihaz onaylar (cihaz-onay)
-// 3) ana cihaz da onaylayana kadar durum yokla -> token gelince config'e yaz
-// Parola HİÇ gelmez; gelen token bu cihazın kendi iptal edilebilir anahtarıdır.
-let pollTimer = null;
-$('baglanBtn').onclick = async () => {
-  const adres = $('adres').value.trim().replace(/\/$/, '');
-  const kod = $('kod').value.trim();
-  const cihazAd = $('cihazAd').value.trim() || 'İsimsiz cihaz';
-  $('pairErr').textContent = ''; $('pairDurum').textContent = '';
-  if (!/^https?:\/\//.test(adres)) { $('pairErr').textContent = 'Geçerli bir adres gir (http://... ile başlamalı).'; return; }
-  if (!/^\d{6}$/.test(kod)) { $('pairErr').textContent = 'Kod 6 haneli olmalı.'; return; }
-  $('baglanBtn').disabled = true;
-  try {
-    const claimR = await fetch(adres + '/api/pair/claim', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kod, cihazAdi: cihazAd }),
-    });
-    if (!claimR.ok) throw new Error(await claimR.text());
-    const { claimId } = await claimR.json();
-    // bu cihaz kendi onayını verir
-    await fetch(adres + '/api/pair/cihaz-onay', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kod, claimId }),
-    });
-    $('pairDurum').textContent = '✓ Sen onayladın. Şimdi ANA CİHAZDA da "Onayla"ya bas — bekleniyor…';
-    // ana cihazın onayını bekle
-    pollTimer = setInterval(async () => {
-      try {
-        const s = await fetch(adres + '/api/pair/durum?kod=' + kod + '&claimId=' + encodeURIComponent(claimId)).then((r) => r.json());
-        if (s.durum === 'onaylandi' && s.token) {
-          clearInterval(pollTimer);
-          patchConfig((c) => { c.mode = 'client'; c.server = adres; c.password = s.token; c.setupDone = true; });
-          $('pairDurum').textContent = '✅ Eşleşme tamam! Bağlanılıyor…';
-          setTimeout(bitti, 800);
-        } else if (s.durum === 'yok') {
-          clearInterval(pollTimer);
-          $('baglanBtn').disabled = false;
-          $('pairErr').textContent = 'Eşleşme iptal oldu ya da kodun süresi geçti. Yeni kod al, tekrar dene.';
-        }
-      } catch {}
-    }, 1500);
-  } catch (e) {
-    $('baglanBtn').disabled = false;
-    $('pairErr').textContent = 'Olmadı: ' + String(e.message || e).slice(0, 80);
-  }
-};
-
-function durum(cb) {
-  execFile('tailscale', ['status', '--json'], (e, out) => {
-    try {
-      const s = JSON.parse(out);
-      cb({ state: s.BackendState || 'bilinmiyor', ip: ((s.Self && s.Self.TailscaleIPs) || [])[0] || '' });
-    } catch { cb({ state: 'yok', ip: '' }); }
-  });
-}
-
-function kur() {
-  if (process.platform !== 'linux') {
-    // win/mac: resmi indirme sayfasina yonlendir, sessiz kurulum denemesi yok
-    openUrl('https://tailscale.com/download');
-    $('durum').textContent = 'İndirme sayfası açıldı. Kurduktan sonra bu ekran kendini güncelleyecek.';
-    return;
-  }
-  busy = true; $('ana').disabled = true;
-  $('durum').textContent = 'Kuruluyor... (sistem parolanı soracak)';
-  exec("pkexec sh -c 'curl -fsSL https://tailscale.com/install.sh | sh'", (e, out, err) => {
-    busy = false; $('ana').disabled = false;
-    if (e) $('durum').textContent = 'Kurulamadı: ' + (err || e.message).split('\n')[0]
-      + ' — Terminalden de kurabilirsin: curl -fsSL https://tailscale.com/install.sh | sh';
-    guncelle();
-  });
-}
-
-function girisYap() {
-  busy = true; $('ana').disabled = true;
-  $('durum').textContent = 'Bağlanılıyor... giriş linki tarayıcıda açılacak, orada onayla.';
-  const user = os.userInfo().username;
-  // --operator: bundan sonra tailscale komutlari root istemesin
-  const child = exec('pkexec tailscale up --operator=' + user, () => { busy = false; guncelle(); });
-  let seen = '';
-  const scan = (d) => {
-    seen += d;
-    const m = seen.match(/https:\/\/login\.tailscale\.com\/\S+/);
-    if (m) { openUrl(m[0]); $('durum').innerHTML = 'Tarayıcıda onay bekleniyor... Link açılmadıysa: <code>' + m[0] + '</code>'; seen = ''; }
-  };
-  child.stdout.on('data', scan);
-  child.stderr.on('data', scan);
-}
-
-function guncelle() {
-  if (busy) return;
-  durum((st) => {
-    const b = $('ana');
-    b.disabled = false; // mesgul degiliz: onceki adimdan kalan pasiflik kalksin
-    if (st.state === 'Running') {
-      $('durum').innerHTML = '✅ Bağlı! Bu cihazın kalıcı adresi: <span id="ip">' + st.ip + '</span>'
-        + (q.get('mode') === 'host'
-          ? '<br>Diğer cihazında bu adresi kullan: <code>http://' + st.ip + ':7777</code>'
-          : '<br>Host cihazındaki IP\'yi config\'e yazmayı unutma.');
-      b.style.display = ''; b.textContent = 'Devam et →'; b.onclick = bitti;
-      return;
-    }
-    if (st.state === 'yok') {
-      $('durum').textContent = 'Tailscale bu cihazda kurulu değil.';
-      b.style.display = ''; b.textContent = process.platform === 'linux' ? 'Tailscale\'i kur (tek tık)' : 'İndirme sayfasını aç';
-      b.onclick = kur;
-      return;
-    }
-    // NeedsLogin, Stopped, vb.
-    $('durum').textContent = 'Tailscale kurulu ama bağlı değil (durum: ' + st.state + ').';
-    b.style.display = ''; b.textContent = 'Giriş yap & bağlan'; b.onclick = girisYap;
-  });
-}
-
-guncelle();
-setInterval(guncelle, 3000); // kur/giris disarida tamamlanirsa ekran kendini yakalar
-</script>
+<script src="setup.js"></script>
 </body>
 </html>

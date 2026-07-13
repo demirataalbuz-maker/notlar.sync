@@ -51,14 +51,14 @@
   /* 📊 zihin raporu paneli (sol tarafta acilir) */
   #rapor {
     position: absolute; top: 64px; left: 16px; bottom: 64px; width: 360px; z-index: 6;
-    background: var(--panel); border: 1px solid var(--edge); border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
     padding: 18px; overflow-y: auto; transform: translateX(-400px); transition: transform 0.2s ease;
   }
   #rapor.open { transform: translateX(0); }
   #rapor h2 { font-size: 15px; margin: 0 0 10px; }
   #rapor .close { position: absolute; top: 14px; right: 16px; background: none; border: none;
     color: var(--text-dim); font-size: 18px; cursor: pointer; line-height: 1; }
-  .rTitle { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  .rTitle { font-size: 11px; text-transform: uppercase; letter-spacing: 0;
     color: var(--text-dim); margin: 14px 0 6px; }
   .rLine { font-size: 12.5px; color: var(--text-muted); padding: 4px 0;
     border-bottom: 1px solid var(--edge); line-height: 1.5; }
@@ -83,7 +83,7 @@
 
   #legend {
     position: absolute; bottom: 16px; left: 16px; z-index: 5;
-    background: var(--panel); border: 1px solid var(--edge); border-radius: 10px;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
     padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px 14px; max-width: 60vw;
   }
   .legend-item {
@@ -98,18 +98,18 @@
 
   #panel {
     position: absolute; top: 16px; right: 16px; bottom: 16px; width: 300px; z-index: 6;
-    background: var(--panel); border: 1px solid var(--edge); border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 8px;
     padding: 18px; overflow-y: auto; transform: translateX(340px); transition: transform 0.2s ease;
   }
   #panel.open { transform: translateX(0); }
   #panel .type-pill {
-    display: inline-block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;
+    display: inline-block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0;
     padding: 2px 8px; border-radius: 999px; margin-bottom: 10px;
   }
   #panel h2 { font-size: 17px; margin: 0 0 4px; text-wrap: balance; }
   #panel .file { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; }
   #panel .desc { font-size: 13px; color: var(--text-muted); line-height: 1.55; margin-bottom: 16px; }
-  #panel .conn-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  #panel .conn-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0;
     color: var(--text-dim); margin-bottom: 8px; }
   #panel .conn { display: block; width: 100%; text-align: left; background: none; border: none;
     color: var(--text); font-size: 12.5px; padding: 6px 0; border-bottom: 1px solid var(--edge);
@@ -166,7 +166,16 @@
 // (adres cubugu / gecmis / log kalintisi olmasin). Dogrudan acilista ?key=
 // hala calisir (elle kullanim), ama uygulama artik oyle cagirmiyor.
 let KEY = new URLSearchParams(location.search).get('key') || '';
-const keyQ = () => KEY ? '?key=' + encodeURIComponent(KEY) : '';
+function authFetch(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (KEY) headers.set('X-Api-Key', KEY);
+  return fetch(path, { ...options, headers });
+}
+function openMappedNote(node) {
+  const name = String(node.file || '').replace(/\.md$/, '') || node.label;
+  if (window.parent !== window) window.parent.postMessage({ type: 'open-note', name }, location.origin);
+  else window.open('/api/note/' + encodeURIComponent(name), '_blank');
+}
 let DATA = { nodes: [], edges: [] };
 const COLORS = {
   user: '#5ec8c0', feedback: '#ef7fb1', project: '#e0b34d',
@@ -214,6 +223,7 @@ function loadGraph(data) {
   edges = DATA.edges
     .map(e => ({ a: byId[e.source], b: byId[e.target], rel: e.relation || null }))
     .filter(e => e.a && e.b);
+  window.__notlarGraphStats = { nodes: nodes.length, edges: edges.length };
   nodes.forEach(n => {
     n.conns = edges.filter(e => e.a === n || e.b === n)
       .map(e => ({ node: e.a === n ? e.b : e.a, rel: e.rel }));
@@ -236,13 +246,13 @@ function sugFor(n) {
     .map(s => ({ node: byId[s.source === n.id ? s.target : s.source], neden: s.neden, sug: s }));
 }
 async function zihinPost(path, body) {
-  const r = await fetch(path + keyQ(), { method: 'POST', body: JSON.stringify(body || {}) });
+  const r = await authFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   if (!r.ok) throw new Error(await r.text());
   return r.text();
 }
 async function refreshOneriler() {
   try {
-    const st = await fetch('/api/graph/oneriler' + keyQ()).then(r => r.json());
+    const st = await authFetch('/api/graph/oneriler').then(r => r.json());
     sugEdges = (st.oneriler || []).filter(s => byId[s.source] && byId[s.target]);
   } catch (e) { /* sunucu gecici kapali olabilir */ }
   sugBadge();
@@ -547,8 +557,7 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('mouseup', (e) => {
   if (dragNode && !moved) selectNode(dragNode);
   // evren modu: gezegene tık (sürüklemeden) → notu yeni sekmede aç
-  if (pendingPlanet && !moved && pendingPlanet.member.file)
-    window.open('/api/note/' + encodeURIComponent(pendingPlanet.member.label) + keyQ(), '_blank');
+  if (pendingPlanet && !moved && pendingPlanet.member.file) openMappedNote(pendingPlanet.member);
   pendingPlanet = null;
   if (dragNode) dragNode.fixed = false;
   dragNode = null; panning = false;
@@ -593,7 +602,7 @@ function selectNode(n) {
       b.className = 'conn';
       b.textContent = '📄 ' + m.label;
       b.title = 'notu aç';
-      b.onclick = () => { if (m.file) window.open('/api/note/' + encodeURIComponent(m.label) + keyQ(), '_blank'); };
+      b.onclick = () => { if (m.file) openMappedNote(m); };
       box.appendChild(b);
     });
     return;
@@ -668,9 +677,8 @@ sugBtn.addEventListener('click', async () => {
   sugBtn.textContent = '🤖 düşünüyor…'; sugBtn.disabled = true;
   try {
     const q = new URLSearchParams();
-    if (params.get('key')) q.set('key', params.get('key'));
     if (showAI.checked) q.set('gizli', '1');
-    const r = await fetch('/api/graph/suggest' + (q.toString() ? '?' + q : ''));
+    const r = await authFetch('/api/graph/suggest' + (q.toString() ? '?' + q : ''));
     if (!r.ok) throw new Error(await r.text());
     sugEdges = (await r.json()).filter(s => byId[s.source] && byId[s.target]);
     sugBadge();
@@ -687,7 +695,7 @@ sugBtn.addEventListener('click', async () => {
 // yazilir ve yol gosterilir.
 async function motorKontrol() {
   try {
-    const m = await fetch('/api/motor' + keyQ()).then((r) => r.json());
+    const m = await authFetch('/api/motor').then((r) => r.json());
     if (m && m.var) document.getElementById('expWrap').style.display = '';
   } catch {}
 }
@@ -699,12 +707,11 @@ const expMenu = document.getElementById('expMenu');
   b.onclick = async () => {
     expMenu.style.display = 'none';
     const q = new URLSearchParams({ format: f });
-    if (KEY) q.set('key', KEY);
     if (showAI.checked) q.set('gizli', '1');
     if (f === 'obsidian' || f === 'wiki') {
       b.disabled = true;
       try {
-        const r = await fetch('/api/graph/export?' + q);
+        const r = await authFetch('/api/graph/export?' + q);
         if (!r.ok) throw new Error(await r.text());
         alert('Yazıldı: ' + (await r.json()).klasor);
       } catch (e) { alert('olmadı: ' + String(e.message).slice(0, 120)); }
@@ -729,9 +736,8 @@ document.getElementById('rprBtn').onclick = async () => {
   body.textContent = 'yükleniyor…';
   try {
     const q = new URLSearchParams();
-    if (params.get('key')) q.set('key', params.get('key'));
     if (showAI.checked) q.set('gizli', '1');
-    const r = await fetch('/api/graph/rapor' + (q.toString() ? '?' + q : '')).then(x => x.json());
+    const r = await authFetch('/api/graph/rapor' + (q.toString() ? '?' + q : '')).then(x => x.json());
     renderRapor(r, body);
   } catch (e) { body.textContent = 'rapor alınamadı: ' + (e.message || e); }
 };
@@ -745,9 +751,8 @@ document.getElementById('sorInput').addEventListener('keydown', async (e) => {
   out.textContent = '🤔 grafta geziliyor, notlar okunuyor…';
   try {
     const qs = new URLSearchParams({ q });
-    if (params.get('key')) qs.set('key', params.get('key'));
     if (showAI.checked) qs.set('gizli', '1');
-    const r = await fetch('/api/graph/query?' + qs).then((x) => x.json());
+    const r = await authFetch('/api/graph/query?' + qs).then((x) => x.json());
     out.textContent = r.cevap || r.hata || r.not || 'cevap yok';
     if (r.kullanilan && r.kullanilan.length) {
       const k = document.createElement('div');
@@ -839,7 +844,6 @@ grupBtn.addEventListener('click', () => {
 grupBtnGorunum();
 function graphUrl() {
   const q = new URLSearchParams();
-  if (KEY) q.set('key', KEY);
   if (showAI.checked) q.set('gizli', '1');
   if (gruplu) q.set('gruplu', '1');
   if (landing) q.set('sade', '1'); // açılış evreni: meta/sistem notlarını gizle
@@ -848,7 +852,7 @@ function graphUrl() {
 let reloadTimer = null;
 async function refresh() {
   try {
-    const g = await fetch(graphUrl()).then(r => r.json());
+    const g = await authFetch(graphUrl()).then(r => r.json());
     loadGraph(g);
   } catch (e) { /* sunucu gecici kapali olabilir, sonraki sinyalde tekrar dener */ }
 }
@@ -856,15 +860,17 @@ function scheduleRefresh() { clearTimeout(reloadTimer); reloadTimer = setTimeout
 
 // baslangic anahtar geldikten SONRA: yoksa ilk istekler 401 yiyip bos kalirdi
 let basladi = false;
-function basla() {
+async function basla() {
   if (basladi) return;
   basladi = true;
+  try { await authFetch('/api/session'); } catch {}
   motorKontrol();
   refresh().then(refreshOneriler);
   // canli senkron: not eklenince/degisince/silinince harita kendini gunceller;
   // oneri kuyrugu degisince (baska cihaz/ajan) oneriler de tazelenir
   try {
-    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + keyQ());
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/');
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', key: KEY }));
     ws.onmessage = (ev) => {
       let m; try { m = JSON.parse(ev.data); } catch { return; }
       if (m.type === 'list' || m.type === 'content') scheduleRefresh();

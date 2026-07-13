@@ -2,8 +2,8 @@
 // ekle" ile kurulur, sunucuya ulasilamadiginda kabuk yine acilir (notlar WS
 // gelince dolar; offline duzenleme kuyrugu index.html tarafinda).
 // API istekleri ASLA onbellekten donmez - bayat veri canli senkronu bozar.
-const CACHE = 'notlar-sync-v1';
-const SHELL = ['/', '/harita.html', '/tools.js', '/vault.js', '/manifest.json', '/icon.svg'];
+const CACHE = 'notlar-sync-v6';
+const SHELL = ['/', '/brain.html', '/brain.js', '/harita.html', '/tools.js', '/vault.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

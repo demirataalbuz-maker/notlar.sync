@@ -6,7 +6,13 @@
   const te = new TextEncoder(), td = new TextDecoder();
   const ITER = 600000;
 
-  const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  function b64(buf) {
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000)
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+  }
   const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
   async function deriveKey(password, salt, iter) {
@@ -18,6 +24,7 @@
   }
 
   async function encrypt(entries, password) {
+    if (!Array.isArray(entries)) throw new Error('Kasa biçimi geçersiz');
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const key = await deriveKey(password, salt, ITER);
@@ -28,10 +35,16 @@
 
   async function decrypt(blobStr, password) {
     const b = typeof blobStr === 'string' ? JSON.parse(blobStr) : blobStr;
-    const key = await deriveKey(password, unb64(b.salt), b.iter || ITER);
+    if (!b || b.v !== 1 || b.kdf !== 'PBKDF2-SHA256' || typeof b.ct !== 'string')
+      throw new Error('Kasa biçimi desteklenmiyor');
+    const iter = Number(b.iter || ITER);
+    if (!Number.isInteger(iter) || iter < 100000 || iter > 1000000) throw new Error('KDF ayarı geçersiz');
+    const key = await deriveKey(password, unb64(b.salt), iter);
     // yanlis parola burada 'OperationError' firlatir (GCM auth tag tutmaz)
     const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(b.iv) }, key, unb64(b.ct));
-    return JSON.parse(td.decode(pt));
+    const entries = JSON.parse(td.decode(pt));
+    if (!Array.isArray(entries)) throw new Error('Kasa içeriği geçersiz');
+    return entries;
   }
 
   // CSV ice aktar (Chrome/Firefox/Bitwarden vb. disa aktarim). Baslik satirindan alan eslesir.
@@ -74,7 +87,7 @@
 
   // guclu sifre uretici
   function genPassword(len = 20, opt = {}) {
-    let set = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYЗ0123456789'.replace('З', '');
+    let set = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     if (opt.symbols !== false) set += '!@#$%^&*()-_=+[]{};:,.?';
     const rnd = crypto.getRandomValues(new Uint32Array(len));
     let out = '';

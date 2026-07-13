@@ -14,6 +14,21 @@ const DOSYA = 'zihin.json';
 // AI-Hafiza oneki bilincli: gunluk, haritadaki 🧠 anahtariyla birlikte gizlenir
 const GUNLUK_NOTU = 'AI-Hafiza-Zihin-Gunlugu';
 
+function atomicJson(file, value) {
+  const tmp = file + '.tmp-' + process.pid + '-' + crypto.randomBytes(3).toString('hex');
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 1), { mode: 0o600 });
+  try { fs.renameSync(tmp, file); }
+  catch (e) {
+    if (!['EEXIST', 'EPERM'].includes(e.code) || !fs.existsSync(file)) {
+      try { fs.unlinkSync(tmp); } catch {}
+      throw e;
+    }
+    fs.unlinkSync(file);
+    fs.renameSync(tmp, file);
+  }
+  try { fs.chmodSync(file, 0o600); } catch {}
+}
+
 function load(dataDir) {
   try {
     const st = JSON.parse(fs.readFileSync(path.join(dataDir, DOSYA), 'utf8'));
@@ -22,7 +37,7 @@ function load(dataDir) {
 }
 
 function save(dataDir, st) {
-  fs.writeFileSync(path.join(dataDir, DOSYA), JSON.stringify(st, null, 1));
+  atomicJson(path.join(dataDir, DOSYA), st);
 }
 
 const pairKey = (a, b) => [a, b].sort().join('|');
@@ -102,24 +117,65 @@ function reddet(dataDir, id) {
 function fetchPage(url, cb, depth = 0) {
   let u;
   try { u = new URL(url); } catch { return cb('gecersiz URL'); }
-  if (!/^https?:$/.test(u.protocol)) return cb('sadece http/https desteklenir');
-  const mod = u.protocol === 'https:' ? require('https') : require('http');
-  const req = mod.get(u, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (NotlarSync)', 'Accept': 'text/html,*/*' },
-    timeout: 15000,
-  }, (res) => {
-    if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && depth < 3) {
-      res.resume();
-      return fetchPage(new URL(res.headers.location, u).href, cb, depth + 1);
+  if (!/^https?:$/.test(u.protocol) || u.username || u.password) return cb('sadece kimlik bilgisiz http/https desteklenir');
+  const dns = require('dns');
+  const net = require('net');
+  const privateAddress = (address) => {
+    const ip = String(address).toLowerCase().replace(/^\[|\]$/g, '');
+    if (net.isIPv4(ip)) {
+      const p = ip.split('.').map(Number);
+      return p[0] === 0 || p[0] === 10 || p[0] === 127 || p[0] >= 224
+        || (p[0] === 100 && p[1] >= 64 && p[1] <= 127)
+        || (p[0] === 169 && p[1] === 254)
+        || (p[0] === 172 && p[1] >= 16 && p[1] <= 31)
+        || (p[0] === 192 && p[1] === 168)
+        || (p[0] === 198 && (p[1] === 18 || p[1] === 19));
     }
-    if (res.statusCode !== 200) { res.resume(); return cb('HTTP ' + res.statusCode); }
-    const chunks = [];
-    let size = 0;
-    res.on('data', (c) => { chunks.push(c); size += c.length; if (size > 3e6) req.destroy(); });
-    res.on('end', () => cb(null, Buffer.concat(chunks).toString('utf8')));
+    if (net.isIPv6(ip)) {
+      if (ip.startsWith('::ffff:')) return privateAddress(ip.slice(7));
+      return ip === '::' || ip === '::1' || ip.startsWith('fc') || ip.startsWith('fd')
+        || /^fe[89ab]/.test(ip);
+    }
+    return true;
+  };
+  const hostname = u.hostname.replace(/^\[|\]$/g, '');
+  if (hostname.toLowerCase() === 'localhost') return cb('yerel/ozel adreslere erisim engellendi');
+  dns.lookup(hostname, { all: true, verbatim: true }, (lookupError, addresses) => {
+    if (lookupError || !addresses.length) return cb('adres cozumlenemedi');
+    if (addresses.some((entry) => privateAddress(entry.address))) return cb('yerel/ozel adreslere erisim engellendi');
+    const selected = addresses[0].address;
+    const mod = u.protocol === 'https:' ? require('https') : require('http');
+    let finished = false;
+    const done = (error, body) => { if (!finished) { finished = true; cb(error, body); } };
+    const req = mod.get({
+      hostname: selected,
+      port: u.port || undefined,
+      path: u.pathname + u.search,
+      servername: u.protocol === 'https:' ? hostname : undefined,
+      headers: { Host: u.host, 'User-Agent': 'Mozilla/5.0 (NotlarSync)', Accept: 'text/html,text/plain,application/xhtml+xml' },
+      timeout: 15000,
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && depth < 3) {
+        res.resume();
+        return fetchPage(new URL(res.headers.location, u).href, done, depth + 1);
+      }
+      if (res.statusCode !== 200) { res.resume(); return done('HTTP ' + res.statusCode); }
+      const contentType = String(res.headers['content-type'] || '').toLowerCase();
+      if (contentType && !/^(text\/|application\/xhtml\+xml)/.test(contentType)) {
+        res.resume(); return done('desteklenmeyen sayfa turu');
+      }
+      const chunks = [];
+      let size = 0;
+      res.on('data', (chunk) => {
+        size += chunk.length;
+        if (size > 3e6) { req.destroy(); return done('sayfa cok buyuk'); }
+        chunks.push(chunk);
+      });
+      res.on('end', () => done(null, Buffer.concat(chunks).toString('utf8')));
+    });
+    req.on('error', (error) => done(error.message));
+    req.on('timeout', () => { req.destroy(); done('zaman asimi (15sn)'); });
   });
-  req.on('error', (e) => cb(e.message));
-  req.on('timeout', () => { req.destroy(); cb('zaman asimi (15sn)'); });
 }
 
 function decodeEntities(s) {
@@ -160,6 +216,12 @@ const EMBED_IPUCLARI = ['embed', 'bge', 'minilm', 'mxbai', 'arctic', 'nomic'];
 
 function ollamaJson(pathname, payload, cb) {
   const body = payload ? JSON.stringify(payload) : null;
+  let settled = false;
+  const done = (error, value) => {
+    if (settled) return;
+    settled = true;
+    cb(error, value);
+  };
   const req = http.request({
     host: '127.0.0.1', port: 11434, path: pathname,
     method: body ? 'POST' : 'GET', timeout: 120000,
@@ -167,10 +229,10 @@ function ollamaJson(pathname, payload, cb) {
   }, (res) => {
     let d = '';
     res.on('data', (c) => d += c);
-    res.on('end', () => { try { cb(null, JSON.parse(d)); } catch { cb('cozulemedi'); } });
+    res.on('end', () => { try { done(null, JSON.parse(d)); } catch { done('cozulemedi'); } });
   });
-  req.on('error', (e) => cb(e.message));
-  req.on('timeout', () => { req.destroy(); cb('zaman asimi'); });
+  req.on('error', (e) => done(e.message));
+  req.on('timeout', () => { done('zaman asimi'); req.destroy(); });
   req.end(body);
 }
 
@@ -208,7 +270,7 @@ function embedCached(dataDir, model, texts, cb) {
   try { cache = JSON.parse(fs.readFileSync(cachePath, 'utf8')); } catch {}
   const eksik = [...new Set(texts.filter((t) => !cache[anahtar(t)]))];
   const bitir = () => {
-    try { fs.writeFileSync(cachePath, JSON.stringify(cache)); } catch {}
+    try { atomicJson(cachePath, cache); } catch {}
     cb(texts.map((t) => cache[anahtar(t)] || null));
   };
   if (!eksik.length) return bitir();

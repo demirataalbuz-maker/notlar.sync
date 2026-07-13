@@ -1,11 +1,17 @@
 {
   "name": "notlar-sync",
-  "version": "1.2.3",
+  "version": "2.0.0",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "server": "node server.js",
-    "dist": "electron-builder"
+    "test": "bash ./test.sh",
+    "bundle:mcp": "esbuild mcp.js --bundle --platform=node --format=cjs --target=node18 --outfile=integration/mcp.cjs",
+    "check": "node --check main.js && node --check setup-preload.js && node --check server.js && node --check memory.js && node --check memory-index.js && node --check temporal.js && node --check integrations.js && node --check agent-bridge.js && node --check graph.js && node --check zihin.js && node --check kopru.js && node --check installer.js && node --check obsidian.js && node --check eslestirme.js && node --check mcp.js && node --check olcum/temporal-eval.js && node --check olcum/memory-scale-eval.js && node --check tests/memory-reliability.test.js && node --check public/setup.js && node --check public/vault.js && node --check public/tools.js && node --check public/brain.js && node --check extension/background.js && node --check extension/content.js && node --check extension/popup.js && node --check scripts/ws-smoke.js && node --check scripts/ui-smoke.js && node --check scripts/electron-setup-smoke.js",
+    "eval:temporal": "node olcum/temporal-eval.js",
+    "eval:scale": "node olcum/memory-scale-eval.js",
+    "eval:scale:ci": "node olcum/memory-scale-eval.js --ci",
+    "dist": "npm run bundle:mcp && electron-builder"
   },
   "keywords": [
     "notes",
@@ -19,13 +25,15 @@
   ],
   "author": "Demir Ata Albuz <demirataalbuz@gmail.com>",
   "license": "ISC",
-  "description": "Iki PC arasi anlik senkron, Obsidian temali not uygulamasi",
+  "description": "Yerel oncelikli canli senkron not ve kisisel bilgi alani",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {
     "electron": "^41.7.1",
     "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
     "sharp": "^0.35.3"
   },
   "build": {
@@ -33,13 +41,37 @@
     "productName": "Notlar Sync",
     "files": [
       "main.js",
+      "setup-preload.js",
       "server.js",
       "graph.js",
       "zihin.js",
       "kopru.js",
+      "installer.js",
+      "obsidian.js",
+      "eslestirme.js",
       "mcp.js",
+      "memory.js",
+      "memory-index.js",
+      "temporal.js",
+      "integrations.js",
+      "agent-bridge.js",
+      "integration/mcp.cjs",
       "public/**",
       "app-config.example.json"
+    ],
+    "extraResources": [
+      {
+        "from": "extension",
+        "to": "extension"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "demirataalbuz-maker",
+        "repo": "notlar.sync",
+        "releaseType": "draft"
+      }
     ],
     "linux": {
       "target": [
@@ -72,10 +104,10 @@
       "perMachine": false
     }
   },
-  "homepage": "https://github.com/demirataalbuz-maker/notlar-sync",
+  "homepage": "https://github.com/demirataalbuz-maker/notlar.sync",
   "desktopName": "notlar-sync.desktop",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/demirataalbuz-maker/notlar-sync.git"
+    "url": "git+https://github.com/demirataalbuz-maker/notlar.sync.git"
   }
 }

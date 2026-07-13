@@ -3,47 +3,79 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1e1e1e">
+<meta name="theme-color" content="#101112">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg">
 <title>Notlar Sync</title>
 <style>
-  /* Obsidian koyu tema renkleri */
+  /* === Notlar Sync — yeni arayüz tasarımı (design handoff) === */
   :root {
-    --bg1: #1e1e1e;      /* editor arkaplan */
-    --bg2: #262626;      /* sidebar */
-    --bg3: #363636;      /* hover */
-    --border: #3f3f3f;
-    --text: #dadada;
-    --muted: #999;
-    --accent: #7f6df2;   /* obsidian moru */
+    --bg:      #101014;   /* en arka / editör */
+    --bg1:     #101014;   /* editör arkaplan + input (eski ad korunur) */
+    --panel:   #16161c;   /* pencere gövdesi */
+    --bg2:     #1a1a21;   /* kenar çubuğu / kartlar */
+    --bg3:     #23232b;   /* yükseltilmiş / hover */
+    --border:  #2a2a33;
+    --border2: #3a3a46;
+    --head:    #ececf2;   /* birincil metin (başlık) */
+    --text:    #c9c9d4;   /* gövde metni */
+    --sec:     #9d9dac;
+    --muted:   #6f6f7d;
+    --accent:  #a88bfa;   /* mor vurgu */
+    --accent-soft: rgba(168,139,250,0.12);
+    --ok:      #4ade80;   /* senkron / başarı */
+    --warn:    #f59e0b;
+    --pink:    #f472b6;   /* AI önerisi */
+    --cyan:    #67e8f9;   /* AI-Hafiza */
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: var(--bg1); color: var(--text);
-    font-family: 'Segoe UI', Ubuntu, sans-serif;
+    background: var(--bg); color: var(--text);
+    font-family: Inter, 'Segoe UI', Ubuntu, system-ui, sans-serif;
     height: 100vh; display: flex; overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* --- ikon rayı (56px) --- */
+  #rail {
+    width: 56px; min-width: 56px; background: var(--bg);
+    border-right: 1px solid var(--bg3);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 14px 0; gap: 6px; flex-shrink: 0;
+  }
+  #railLogo {
+    width: 32px; height: 32px; border-radius: 8px; background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; margin-bottom: 14px; user-select: none;
+  }
+  .railBtn {
+    width: 38px; height: 38px; border-radius: 9px; border: none;
+    background: none; color: var(--text); font-size: 17px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1; transition: background .15s ease;
+  }
+  .railBtn:hover { background: var(--bg3); }
+  .railBtn.active { background: var(--bg3); }
+  .railSpacer { flex: 1; }
+  #railSync {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding-bottom: 6px; font-size: 9px; color: var(--muted); font-weight: 600;
   }
 
   /* --- sidebar --- */
   #sidebar {
-    width: 260px; min-width: 260px; background: var(--bg2);
-    border-right: 1px solid var(--border);
+    width: 272px; min-width: 272px; background: var(--bg2);
+    border-right: 1px solid var(--bg3);
     display: flex; flex-direction: column;
   }
-  #sidebar header {
-    padding: 12px 14px; font-size: 13px; font-weight: 600;
-    color: var(--muted); text-transform: uppercase; letter-spacing: 1px;
-    display: flex; justify-content: space-between; align-items: center;
-    border-bottom: 1px solid var(--border);
+  #newBtn {
+    margin: 12px; background: var(--accent); color: var(--bg);
+    border: none; border-radius: 8px; padding: 10px; font-size: 13.5px;
+    font-weight: 700; cursor: pointer; text-align: center;
+    font-family: inherit; transition: filter .15s ease;
   }
-  #newBtn, #setBtn, #vaultBtn, #toolsBtn, #aiBtn, #mapBtn {
-    background: none; border: none; color: var(--accent);
-    font-size: 20px; cursor: pointer; line-height: 1;
-  }
-  #setBtn { font-size: 17px; color: var(--muted); }
-  #vaultBtn, #toolsBtn, #aiBtn, #mapBtn { font-size: 15px; }
-  #newBtn:hover, #setBtn:hover { color: #a396ff; }
+  #newBtn:hover { filter: brightness(1.15); }
 
   /* zihin haritasi tam-ekran overlay */
   #mapOverlay {
@@ -53,23 +85,27 @@
   #mapOverlay.open { display: flex; }
   #mapBar {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 14px; border-bottom: 1px solid #2a2438; flex: none;
+    padding: 10px 16px; border-bottom: 1px solid var(--border); flex: none; gap: 8px;
   }
-  #mapBar strong { font-size: 14px; }
-  #mapClose {
-    background: none; border: 1px solid #3a3350; color: #cfc8e0;
-    border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 13px;
+  #mapBar strong { font-size: 14px; color: var(--head); }
+  #mapBar button {
+    background: none; border: 1px solid var(--border); color: var(--text);
+    border-radius: 7px; padding: 5px 12px; cursor: pointer; font-size: 12.5px;
+    font-family: inherit; transition: background .15s ease;
   }
+  #mapBar button:hover { background: var(--bg3); }
+  #mapClose { color: var(--sec); }
   #mapFrame { border: none; width: 100%; height: 100%; flex: 1; }
 
   /* araclar penceresi ortak stil (ayarlarla ayni kart) */
-  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 20; }
+  .modal { position: fixed; inset: 0; background: rgba(16,16,20,.6); display: none; align-items: center; justify-content: center; z-index: 20; }
   .modalCard {
     width: 560px; max-width: 92vw; max-height: 86vh; overflow-y: auto;
-    background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
-    padding: 22px; display: flex; flex-direction: column; gap: 14px;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 24px; display: flex; flex-direction: column; gap: 14px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6);
   }
-  .modalCard h2 { font-size: 17px; display: flex; justify-content: space-between; align-items: center; }
+  .modalCard h2 { font-size: 17px; color: var(--head); display: flex; justify-content: space-between; align-items: center; }
   .modalCard input, .modalCard select, .modalCard textarea {
     background: var(--bg1); border: 1px solid var(--border); color: var(--text);
     padding: 9px 11px; border-radius: 7px; font-size: 14px; outline: none; width: 100%;
@@ -82,29 +118,35 @@
   .vEntry { background: var(--bg1); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; }
   .vEntry .vt { font-weight: 600; font-size: 14px; }
   .vEntry .vu { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-all; }
-  .mono { font-family: monospace; font-size: 12px; word-break: break-all; }
-  .miniBtn { background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; font-size: 12px; cursor: pointer; white-space: nowrap; }
-  .miniBtn:hover { background: var(--accent); color: #fff; }
+  .vEntry .row { flex-wrap: wrap; }
+  .vaultPasswordGrid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; gap: 8px; align-items: center; }
+  #vResetWrap { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+  #vResetConfirm { margin-top: 10px; padding: 10px 12px; border: 1px solid #70443f; border-radius: 7px; background: #261b1b; }
+  .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .miniBtn { background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; font-size: 12px; cursor: pointer; white-space: nowrap; transition: background .15s ease; }
+  .miniBtn:hover { background: var(--accent); color: var(--bg); }
 
   /* --- ayarlar penceresi --- */
   #settings {
-    position: fixed; inset: 0; background: rgba(0,0,0,.55);
+    position: fixed; inset: 0; background: rgba(16,16,20,.6);
     display: none; align-items: center; justify-content: center; z-index: 20;
   }
   #settingsCard {
     width: 520px; max-height: 82vh; overflow-y: auto;
-    background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
-    padding: 22px; display: flex; flex-direction: column; gap: 18px;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 24px; display: flex; flex-direction: column; gap: 18px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6);
   }
-  #settingsCard h2 { font-size: 17px; display: flex; justify-content: space-between; align-items: center; }
-  #settingsCard h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  #settingsCard h2 { font-size: 17px; color: var(--head); display: flex; justify-content: space-between; align-items: center; }
+  #settingsCard h3 { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0; font-weight: 700; margin-bottom: 8px; }
   .sBlok { border-top: 1px solid var(--border); padding-top: 16px; }
   .sBlok p { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 8px; }
   .sBtn {
-    background: var(--accent); color: #fff; border: none; border-radius: 7px;
-    padding: 9px 14px; font-size: 14px; cursor: pointer; font-weight: 600;
+    background: var(--accent); color: var(--bg); border: none; border-radius: 8px;
+    padding: 9px 14px; font-size: 14px; cursor: pointer; font-weight: 700;
+    font-family: inherit; transition: filter .15s ease;
   }
-  .sBtn:hover { background: #9184ff; }
+  .sBtn:hover { filter: brightness(1.15); }
   .sBtn.gri { background: var(--bg1); color: var(--text); border: 1px solid var(--border); font-weight: 400; }
   #kapatSet { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
   #pairCode {
@@ -117,14 +159,20 @@
     background: var(--bg1); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;
   }
   .hidNote:hover { background: var(--bg3); }
-  #noteList { flex: 1; overflow-y: auto; padding: 6px; }
+  #noteList { flex: 1; overflow-y: auto; padding: 6px 8px; }
+  #folderTools { display: flex; align-items: center; gap: 6px; padding: 0 12px 7px; }
+  #folderTools .miniBtn { flex: none; }
+  #selectedFolderLabel { min-width: 0; flex: 1; color: var(--muted); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+  #folderCreateRow { display: none; gap: 6px; padding: 0 12px 7px; }
+  #folderCreateRow input { min-width: 0; flex: 1; background: var(--bg1); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 8px; }
   .note-item {
-    padding: 7px 10px; border-radius: 5px; cursor: pointer;
-    font-size: 14px; display: flex; justify-content: space-between;
-    align-items: center; margin-bottom: 2px;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer;
+    font-size: 13.5px; font-weight: 500; color: var(--text);
+    display: flex; justify-content: space-between;
+    align-items: center; margin: 1px 0; border-left: 2px solid transparent;
   }
   .note-item:hover { background: var(--bg3); }
-  .note-item.active { background: var(--accent); color: #fff; }
+  .note-item.active { background: var(--bg3); color: var(--head); font-weight: 600; border-left: 2px solid var(--accent); }
   .del {
     visibility: hidden; background: none; border: none;
     color: inherit; opacity: .6; cursor: pointer; font-size: 13px;
@@ -134,25 +182,28 @@
   .del.armed { visibility: visible; color: #ff6b5e; opacity: 1; font-weight: 700; }
 
   #status {
-    padding: 8px 14px; font-size: 12px; color: var(--muted);
-    border-top: 1px solid var(--border);
+    padding: 8px 16px; font-size: 11px; color: var(--muted);
+    border-top: 1px solid var(--bg3);
     display: flex; align-items: center; gap: 7px;
   }
-  #dot { width: 8px; height: 8px; border-radius: 50%; background: #e74c3c; }
-  #dot.on { background: #2ecc71; }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); flex: none; }
+  #dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 
   /* --- editor --- */
-  #main { flex: 1; display: flex; flex-direction: column; }
+  #main { flex: 1; display: flex; flex-direction: column; background: var(--bg); min-width: 0; }
   #titlebar {
-    padding: 14px 34px 6px; font-size: 22px; font-weight: 700;
-    color: var(--text); min-height: 48px;
+    padding: 0 24px; min-height: 52px;
+    border-bottom: 1px solid var(--bg3);
+    font-size: 22px; font-weight: 700; color: var(--head);
   }
+  #titleText { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #editor {
-    flex: 1; background: var(--bg1); color: var(--text);
+    flex: 1; background: var(--bg); color: var(--text);
     border: none; outline: none; resize: none;
-    padding: 10px 34px 34px; font-size: 16px; line-height: 1.7;
-    font-family: 'Segoe UI', Ubuntu, sans-serif;
+    padding: 40px 56px; font-size: 16px; line-height: 1.75;
+    font-family: Inter, 'Segoe UI', Ubuntu, system-ui, sans-serif;
     caret-color: var(--accent);
+    max-width: 832px; width: 100%; margin: 0 auto;
   }
   #empty {
     flex: 1; display: flex; align-items: center; justify-content: center;
@@ -184,70 +235,81 @@
   }
 
   /* --- icerik aramasi (ad + govde) --- */
-  #searchRow { padding: 6px; border-bottom: 1px solid var(--border); }
+  #searchRow { padding: 14px 14px 8px; }
   #searchRow input {
-    width: 100%; background: var(--bg1); border: 1px solid var(--border);
-    color: var(--text); padding: 6px 9px; border-radius: 5px; font-size: 13px; outline: none;
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13px; outline: none;
+    font-family: inherit;
   }
+  #searchRow input::placeholder { color: var(--muted); }
   #searchRow input:focus { border-color: var(--accent); }
-  .snip { font-size: 11px; color: var(--muted); margin-top: 2px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px; }
+  .snip { font-size: 11.5px; color: var(--muted); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
 
   /* --- baslik satiri + onizleme dugmesi --- */
   #titlebar { display: flex; align-items: center; gap: 10px; }
   #previewBtn {
     margin-left: auto; background: none; border: 1px solid var(--border);
-    color: var(--muted); border-radius: 6px; font-size: 13px; padding: 4px 10px;
-    cursor: pointer; display: none;
+    color: var(--text); border-radius: 7px; font-size: 12.5px; padding: 5px 12px;
+    cursor: pointer; display: none; font-family: inherit; transition: background .15s ease;
   }
-  #previewBtn.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+  #previewBtn:hover { background: var(--bg3); }
+  #previewBtn.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
 
   /* --- backlink cubugu ("buraya kimler link veriyor") --- */
-  #backlinks { padding: 0 34px 4px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .bl { font-size: 12px; color: var(--muted); border: 1px solid var(--border);
+  #backlinks { padding: 12px 56px 0; display: flex; flex-wrap: wrap; gap: 6px;
+    max-width: 832px; width: 100%; margin: 0 auto; }
+  .bl { font-size: 12px; color: var(--accent); border: 1px solid var(--border);
     border-radius: 999px; padding: 2px 10px; cursor: pointer; }
-  .bl:hover { color: var(--accent); border-color: var(--accent); }
-  .bl.etiket { border: none; cursor: default; padding-left: 0; }
+  .bl:hover { border-color: var(--accent); }
+  .bl.etiket { border: none; cursor: default; padding-left: 0; color: var(--muted); }
   .bl.etiket:hover { color: var(--muted); }
 
   /* --- markdown onizleme --- */
-  #preview { flex: 1; overflow-y: auto; padding: 10px 34px 34px;
-    font-size: 16px; line-height: 1.7; display: none; }
-  #preview h1, #preview h2, #preview h3, #preview h4 { margin: 14px 0 6px; }
-  #preview p { margin: 2px 0; }
+  #preview { flex: 1; overflow-y: auto; padding: 40px 56px;
+    font-size: 16px; line-height: 1.75; display: none;
+    max-width: 832px; width: 100%; margin: 0 auto; }
+  #preview h1 { font-size: 34px; font-weight: 700; color: var(--head); letter-spacing: 0; margin: 8px 0 14px; }
+  #preview h2 { font-size: 21px; font-weight: 600; color: var(--head); margin: 26px 0 12px;
+    border-bottom: 1px solid var(--bg3); padding-bottom: 8px; }
+  #preview h3, #preview h4 { color: var(--head); margin: 18px 0 6px; }
+  #preview p { margin: 0 0 14px; }
   #preview code { background: var(--bg2); padding: 1px 6px; border-radius: 4px;
-    font-family: monospace; font-size: 14px; }
-  #preview pre { background: var(--bg2); padding: 12px; border-radius: 8px;
-    overflow-x: auto; margin: 10px 0; }
+    font-family: var(--mono); font-size: 14px; }
+  #preview pre { background: var(--bg2); border: 1px solid var(--border); padding: 12px; border-radius: 8px;
+    overflow-x: auto; margin: 14px 0; }
   #preview pre code { background: none; padding: 0; }
   #preview img { max-width: 100%; border-radius: 8px; margin: 6px 0; }
   #preview a { color: var(--accent); }
-  #preview ul, #preview ol { padding-left: 26px; margin: 4px 0; }
+  #preview ul, #preview ol { padding-left: 22px; margin: 0 0 14px; line-height: 1.8; }
   #preview blockquote { border-left: 3px solid var(--accent); padding-left: 12px;
-    color: var(--muted); margin: 8px 0; }
-  #preview hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+    color: var(--sec); margin: 14px 0; }
+  #preview hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
   #preview .wl { color: var(--accent); cursor: pointer; }
   #preview .wl:hover { text-decoration: underline; }
   #preview .wl.ghost { color: var(--muted); border-bottom: 1px dashed var(--muted); }
-  #preview .fm { color: var(--muted); font-size: 12px; background: var(--bg2);
-    border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;
-    white-space: pre-wrap; font-family: monospace; }
+  #preview .fm { color: var(--sec); font-size: 13.5px; background: var(--bg2);
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 18px;
+    white-space: pre-wrap; font-family: var(--mono); }
 
   /* --- mobil: kenar cubugu cekmece olur, ☰ ile acilir --- */
   #burger { display: none; background: none; border: none; color: var(--muted);
     font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px; }
   @media (max-width: 720px) {
     #burger { display: block; }
+    #rail { width: 48px; min-width: 48px; }
+    #rail .railBtn { width: 34px; height: 34px; font-size: 16px; }
+    #railLogo { width: 28px; height: 28px; font-size: 14px; }
     #sidebar {
-      position: fixed; left: 0; top: 0; bottom: 0; z-index: 15;
-      width: min(82vw, 320px); min-width: 0;
-      transform: translateX(-102%); transition: transform 0.2s ease;
+      position: fixed; left: 48px; top: 0; bottom: 0; z-index: 15;
+      width: min(78vw, 300px); min-width: 0;
+      transform: translateX(-110%); transition: transform 0.2s ease;
       box-shadow: 4px 0 24px rgba(0,0,0,.5);
     }
     #sidebar.open { transform: none; }
-    #titlebar { padding: 10px 14px 4px; font-size: 18px; }
-    #editor, #preview { padding: 8px 14px 20px; font-size: 15px; }
-    #backlinks { padding: 0 14px 4px; }
+    #titlebar { padding: 0 14px; min-height: 48px; font-size: 18px; }
+    #editor, #preview { padding: 20px 16px; font-size: 15px; }
+    #backlinks { padding: 12px 16px 0; }
     .modalCard, #settingsCard { max-width: 96vw; max-height: 92vh; }
   }
 
@@ -259,161 +321,579 @@
     box-shadow: 0 8px 24px rgba(0,0,0,.4);
   }
   #autoc div { padding: 7px 12px; font-size: 13.5px; cursor: pointer; }
-  #autoc div.sel, #autoc div:hover { background: var(--accent); color: #fff; }
+  #autoc div.sel, #autoc div:hover { background: var(--accent); color: var(--bg); }
+
+  /* === mockup uyumu: klasör ağacı + sağ bağlantı paneli + mobil alt gezinme === */
+  #titlebar { font-size: 16px; gap: 12px; }
+  #contentRow { flex: 1; display: flex; min-height: 0; }
+  #contentCol { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #rightPanel {
+    display: none; width: 248px; min-width: 248px; border-left: 1px solid var(--bg3);
+    padding: 24px 18px; flex-direction: column; overflow-y: auto;
+  }
+  body.noteOpen #rightPanel { display: flex; }
+  .rpHead { font-size: 10px; font-weight: 700; letter-spacing: 0; color: var(--muted); margin-bottom: 10px; }
+  .blRow { padding: 8px 10px; border-radius: 7px; cursor: pointer; margin-bottom: 2px; }
+  .blRow:hover { background: var(--bg3); }
+  .blAd { font-size: 13px; color: var(--accent); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .blRel { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .blBos { font-size: 12px; color: var(--muted); padding: 4px 10px; }
+  #rpMap {
+    border: 1px dashed var(--border); border-radius: 8px; height: 110px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; cursor: pointer; font-size: 11.5px; color: var(--muted); transition: border-color .15s ease;
+  }
+  #rpMap:hover { border-color: var(--accent); color: var(--text); }
+  .secHead { font-size: 10px; font-weight: 700; letter-spacing: 0; color: var(--muted); padding: 12px 10px 6px; }
+  .folderRow {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px;
+    cursor: pointer; font-size: 13.5px; color: var(--text); font-weight: 500;
+  }
+  .folderRow:hover { background: var(--bg3); }
+  .folderRow.selected { background: var(--bg3); color: var(--head); }
+  .folderRow .chev { font-size: 12px; color: var(--muted); width: 12px; flex: none; }
+  .folderRow .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .folderRow .fcount { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .folderActions { display: flex; gap: 2px; visibility: hidden; }
+  .folderRow:hover .folderActions, .folderRow.selected .folderActions { visibility: visible; }
+  .folderActions button { width: 22px; height: 22px; border: 0; background: none; color: var(--muted); border-radius: 4px; cursor: pointer; padding: 0; }
+  .folderActions button:hover { color: var(--head); background: var(--border); }
+  #bottomNav { display: none; }
+  @media (max-width: 720px) {
+    #rail { display: none; }
+    #sidebar { left: 0; }
+    #rightPanel { display: none !important; }
+    #bottomNav {
+      display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 18;
+      background: var(--bg); border-top: 1px solid var(--bg3);
+      padding: 8px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+    #bottomNav button {
+      flex: 1; background: none; border: none; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 3px; cursor: pointer; padding: 6px; min-height: 44px;
+    }
+    #bottomNav button span { font-size: 19px; filter: grayscale(1) opacity(.6); }
+    #bottomNav button b { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+    #bottomNav button.act span { filter: none; }
+    #bottomNav button.act b { color: var(--accent); font-weight: 700; }
+    #navFab {
+      background: var(--accent); color: var(--bg); font-size: 24px; font-weight: 700;
+      max-width: 48px; width: 48px; height: 48px; min-height: 48px; border-radius: 50%;
+      margin-top: -26px; box-shadow: 0 8px 20px rgba(168,139,250,.35);
+      flex-direction: row; align-self: flex-start;
+    }
+    #main { padding-bottom: 64px; }
+  }
+
+  /* === Uygulama kabugu: her ana ozellik ayri tam sayfa === */
+  body { min-width: 320px; }
+  button, input, textarea, select { letter-spacing: 0; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  #railLogo { border: 0; color: #101014; cursor: pointer; font-family: inherit; }
+  .railBtn { position: relative; }
+  .railBtn::after {
+    content: attr(aria-label); position: absolute; left: 48px; top: 50%; transform: translateY(-50%);
+    background: #292932; color: var(--head); border: 1px solid var(--border2);
+    border-radius: 6px; padding: 5px 8px; font-size: 11px; white-space: nowrap;
+    opacity: 0; pointer-events: none; transition: opacity .12s ease; z-index: 80;
+  }
+  .railBtn:hover::after, .railBtn:focus-visible::after { opacity: 1; }
+  .railBtn.active { color: var(--head); background: var(--bg3); box-shadow: inset 2px 0 var(--accent); }
+
+  #sidebar, #main, .featureView, #mapOverlay, #settings, #vault, #tools, #ai { display: none; }
+  body[data-view="notes"] #sidebar, body[data-view="notes"] #main { display: flex; }
+  body[data-view="overview"] #overviewView,
+  body[data-view="map"] #mapOverlay,
+  body[data-view="vault"] #vault,
+  body[data-view="tools"] #tools,
+  body[data-view="ai"] #ai,
+  body[data-view="document"] #documentView,
+  body[data-view="runtime"] #runtimeView,
+  body[data-view="sync"] #settings,
+  body[data-view="settings"] #appSettings { display: flex; }
+
+  .featureView {
+    flex: 1; min-width: 0; height: 100vh; overflow: auto; background: var(--bg);
+    flex-direction: column;
+  }
+  .featureTopbar {
+    min-height: 56px; padding: 0 22px; display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--border); background: var(--panel); flex: none;
+  }
+  .featureTopbar h1 { font-size: 15px; color: var(--head); font-weight: 700; }
+  .featureTopbar p { color: var(--muted); font-size: 11px; }
+  .featureTopbar .spacer { flex: 1; }
+  .featureBody { width: 100%; max-width: 1180px; padding: 28px 32px 48px; margin: 0 auto; }
+  .eyebrow { color: var(--muted); font-size: 10px; text-transform: uppercase; font-weight: 700; letter-spacing: 0; }
+  .statusPill { border-radius: 5px; padding: 3px 7px; font-size: 10px; font-weight: 700; background: #173326; color: #70dfa0; }
+  .statusPill.warn { background: #3a2b12; color: #f4bd62; }
+  .statusPill.info { background: #17323a; color: #69d6e5; }
+
+  /* Overview bilgi hiyerarsisi: kart duvari yerine istatistik bandi + listeler */
+  .overviewHero { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+  .overviewHero h2 { font-size: 28px; color: var(--head); margin: 5px 0 4px; }
+  .overviewHero p { color: var(--muted); font-size: 13px; }
+  .quickCapture { display: flex; gap: 8px; width: min(460px, 100%); }
+  .quickCapture input { flex: 1; background: var(--panel); border: 1px solid var(--border2); color: var(--text); border-radius: 7px; padding: 10px 12px; }
+  .statsBand { display: grid; grid-template-columns: repeat(6, minmax(90px, 1fr)); border-block: 1px solid var(--border); margin-bottom: 26px; }
+  .statItem { padding: 16px 14px; border-right: 1px solid var(--border); }
+  .statItem:last-child { border-right: 0; }
+  .statValue { display: block; color: var(--head); font-size: 21px; font-weight: 700; }
+  .statLabel { color: var(--muted); font-size: 11px; }
+  .overviewGrid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, .8fr); gap: 28px; }
+  .sectionHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .sectionHeader h3 { color: var(--head); font-size: 13px; }
+  .textBtn { color: var(--accent); border: 0; background: none; cursor: pointer; font-size: 12px; }
+  .overviewList { border-top: 1px solid var(--border); }
+  .overviewRow { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 14px; padding: 13px 4px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .overviewRow:hover { background: rgba(255,255,255,.025); }
+  .overviewName { color: var(--head); font-size: 13px; font-weight: 600; }
+  .overviewSnippet { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+  .overviewMeta { color: var(--muted); font-size: 10px; white-space: nowrap; }
+  .healthList { border-top: 1px solid var(--border); }
+  .healthRow { display: flex; align-items: center; justify-content: space-between; padding: 12px 2px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .runtimeWrap { max-width: 900px; }
+  .runtimeActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .runtimeList { border-top: 1px solid var(--border); }
+  .runtimeRow { display: grid; grid-template-columns: 28px minmax(0,1fr) auto auto; gap: 12px; align-items: center; min-height: 58px; border-bottom: 1px solid var(--border); }
+  .runtimeMark { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #1b3a2a; color: var(--ok); font-size: 12px; font-weight: 700; }
+  .runtimeMark.missing { background: #3a2f1b; color: #e0b050; }
+  .runtimeName { font-size: 13px; font-weight: 650; color: var(--head); }
+  .runtimeDetail { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .runtimeProgress { width: 100%; height: 5px; background: var(--bg3); overflow: hidden; margin: 12px 0; }
+  .runtimeProgress span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s ease; }
+  #runtimeLog { min-height: 110px; max-height: 240px; overflow: auto; background: var(--bg1); border: 1px solid var(--border); padding: 12px; color: var(--muted); font: 11px/1.55 var(--mono); white-space: pre-wrap; }
+
+  /* Tam sayfa moduller */
+  #mapOverlay { position: relative; inset: auto; z-index: 1; flex: 1; height: 100vh; background: var(--bg); }
+  #mapBar { display: flex; min-height: 52px; background: var(--panel); }
+  #mapFrame { height: auto; min-height: 0; }
+  #settings { position: relative; inset: auto; z-index: 1; flex: 1; height: 100vh; background: var(--bg); align-items: stretch; justify-content: flex-start; overflow: auto; }
+  #settingsCard { width: 100%; max-width: 920px; max-height: none; overflow: visible; margin: 0 auto; background: none; border: 0; border-radius: 0; box-shadow: none; padding: 28px 32px 48px; }
+  #settingsCard > h2 { display: none; }
+  #appSettings { flex: 1; }
+  .settingsGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .72fr); gap: 28px; }
+  .settingsSection { border-top: 1px solid var(--border); padding: 16px 0; }
+  .settingsSection h3 { font-size: 12px; color: var(--head); margin-bottom: 10px; }
+  .settingRow { display: grid; grid-template-columns: minmax(0,1fr) minmax(180px, 280px); gap: 18px; align-items: center; padding: 10px 0; }
+  .settingRow label { font-size: 12px; color: var(--text); }
+  .settingRow small { display: block; color: var(--muted); margin-top: 3px; }
+  .settingRow input, .settingRow select { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 8px 10px; width: 100%; }
+  .settingRow input[type="checkbox"] { width: 18px; height: 18px; justify-self: end; accent-color: var(--accent); }
+
+  #vault.modal, #tools.modal, #ai.modal { position: relative; inset: auto; z-index: 1; flex: 1; height: 100vh; background: var(--bg); align-items: stretch; justify-content: flex-start; flex-direction: column; overflow: auto; }
+  #vault .modalCard, #tools .modalCard, #ai .modalCard { width: 100%; max-width: 1180px; max-height: none; overflow: visible; margin: 0 auto; background: none; border: 0; border-radius: 0; box-shadow: none; padding: 28px 32px 48px; }
+  #vault .modalCard > h2, #tools .modalCard > h2, #ai .modalCard > h2 { font-size: 15px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  #vault .modalCard > h2.legacyHeading, #tools .modalCard > h2.legacyHeading, #ai .modalCard > h2.legacyHeading { display: none; }
+  #vault [data-close], #tools [data-close], #ai [data-close] { display: none; }
+  #vOpen { display: grid; grid-template-columns: minmax(0, 1fr); }
+  #vLocked { width: min(460px, 100%); margin: 64px auto 0; }
+
+  #documentView .featureBody { max-width: 880px; }
+  .dropZone { min-height: 270px; border: 1px dashed var(--border2); background: var(--panel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; cursor: pointer; text-align: center; }
+  .dropZone:hover, .dropZone.drag { border-color: var(--accent); background: var(--accent-soft); }
+  .dropZone.disabled { opacity: .55; cursor: not-allowed; }
+  .dropZone strong { color: var(--head); font-size: 14px; }
+  .dropZone span { color: var(--muted); font-size: 11px; }
+  .engineRows { margin-top: 18px; border-top: 1px solid var(--border); }
+  .engineRow { display: flex; justify-content: space-between; padding: 11px 2px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  #docProgress { margin-top: 14px; color: var(--muted); font-size: 12px; min-height: 18px; }
+
+  #trashPanel { display: none; position: absolute; inset: 52px 0 0; background: var(--bg); z-index: 12; overflow: auto; padding: 18px 24px; }
+  #trashPanel.open { display: block; }
+  .trashRow { display: flex; justify-content: space-between; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--border); }
+  .trashRow strong { color: var(--head); font-size: 13px; }
+  .trashRow small { color: var(--muted); display: block; margin-top: 3px; }
+  #noteMenu { position: absolute; right: 24px; top: 46px; min-width: 170px; display: none; padding: 5px; background: var(--bg2); border: 1px solid var(--border2); border-radius: 7px; z-index: 15; box-shadow: 0 14px 30px rgba(0,0,0,.4); }
+  #noteMenu.open { display: block; }
+  #noteMenu button { display: block; width: 100%; border: 0; background: none; color: var(--text); text-align: left; padding: 8px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+  #noteMenu button:hover { background: var(--bg3); }
+  #noteMenu .danger { color: #ff8e86; }
+  #titleActions { display: none; align-items: center; gap: 6px; margin-left: auto; }
+  body.noteOpen #titleActions { display: flex; }
+  #previewBtn { margin-left: 0; }
+  .hidNote { width: 100%; border: 0; color: var(--text); text-align: left; font-family: inherit; }
+
+  @media (max-width: 980px) {
+    .statsBand { grid-template-columns: repeat(3, 1fr); }
+    .statItem:nth-child(3) { border-right: 0; }
+    .overviewGrid, .settingsGrid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    .featureView, #mapOverlay, #settings, #vault.modal, #tools.modal, #ai.modal { height: 100dvh; padding-bottom: 66px; }
+    .featureTopbar { min-height: 50px; padding: 0 14px; }
+    .featureTopbar p { display: none; }
+    .featureBody, #settingsCard, #vault .modalCard, #tools .modalCard, #ai .modalCard { padding: 20px 16px 90px; }
+    #vLocked { margin-top: 8px; }
+    .overviewHero { align-items: stretch; flex-direction: column; }
+    .overviewHero h2 { font-size: 23px; }
+    .quickCapture { width: 100%; }
+    .statsBand { grid-template-columns: repeat(2, 1fr); }
+    .statItem:nth-child(2n) { border-right: 0; }
+    .overviewGrid { gap: 24px; }
+    .settingRow { grid-template-columns: 1fr; gap: 7px; }
+    .settingRow input[type="checkbox"] { justify-self: start; }
+    .vaultPasswordGrid { grid-template-columns: 1fr; }
+    .runtimeRow { grid-template-columns: 24px minmax(0,1fr) auto; padding: 8px 0; }
+    .runtimeRow .statusPill { display: none; }
+    #bottomNav #navFab { background: var(--accent); color: #111116; flex: 0 0 48px; }
+    #bottomNav { display: flex; }
+    #titleActions { gap: 3px; }
+    #titleActions .miniBtn:not(#previewBtn) { padding-inline: 7px; }
+  }
+
+  /* === AI Beyni tasarım sistemi === */
+  :root {
+    --bg: #101112;
+    --bg1: #101112;
+    --panel: #181a1b;
+    --bg2: #181a1b;
+    --bg3: #232627;
+    --border: #2d3032;
+    --border2: #3b3f41;
+    --head: #f2f1ed;
+    --text: #c4c5c2;
+    --sec: #a1a4a5;
+    --muted: #6f7476;
+    --accent: #61d39b;
+    --accent-soft: rgba(97,211,155,.1);
+    --ok: #61d39b;
+    --warn: #e9c66a;
+    --pink: #ff816b;
+    --cyan: #5dc9c1;
+    --blue: #6eb9e7;
+    --violet: #aa97e8;
+    --danger: #f17373;
+  }
+  * { letter-spacing: 0; }
+  body { background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .appIcon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  #rail {
+    width: 72px; min-width: 72px; padding: 12px 0; gap: 8px;
+    background: #141617; border-right: 1px solid var(--border);
+  }
+  #railLogo {
+    width: 40px; height: 40px; margin-bottom: 14px; border-radius: 8px;
+    background: var(--head); color: var(--bg);
+  }
+  #railLogo .appIcon { width: 21px; height: 21px; stroke-width: 2.1; }
+  .railBtn {
+    width: 40px; height: 40px; border: 1px solid transparent; border-radius: 8px;
+    color: var(--muted); font-size: 0;
+  }
+  .railBtn:hover { color: var(--head); background: var(--bg3); }
+  .railBtn.active { color: var(--head); background: var(--bg3); border-color: var(--border); box-shadow: none; }
+  .railBtn.active::before {
+    content: ""; position: absolute; left: -17px; width: 3px; height: 20px;
+    border-radius: 0 3px 3px 0; background: var(--accent);
+  }
+  .railBtn::after { left: 52px; background: var(--bg3); border-color: var(--border2); }
+  #railSync { color: var(--muted); }
+  #railSync #dot { width: 7px; height: 7px; }
+  #sidebar { width: 276px; min-width: 276px; background: var(--panel); border-right-color: var(--border); }
+  #searchRow { padding: 14px 14px 9px; }
+  #searchRow input, #folderCreateRow input { background: var(--bg); border-color: var(--border); border-radius: 7px; }
+  #folderTools { padding-bottom: 9px; border-bottom: 1px solid var(--border); }
+  .note-item, .folderRow { border-radius: 6px; }
+  .note-item.active { border-left-color: var(--accent); }
+  #newBtn, .sBtn { background: var(--head); color: var(--bg); border-radius: 7px; }
+  #newBtn:hover, .sBtn:hover { background: var(--accent); filter: none; }
+  .sBtn.gri, .miniBtn { background: var(--bg3); border-color: var(--border); color: var(--text); border-radius: 6px; }
+  .sBtn.gri:hover, .miniBtn:hover { background: #2b2f30; color: var(--head); }
+  .featureView, #main, #settings, #vault.modal, #tools.modal, #ai.modal { background: var(--bg); }
+  .featureTopbar {
+    min-height: 64px; padding: 0 20px; background: rgba(16,17,18,.96); border-bottom-color: var(--border);
+  }
+  .featureTopbar h1 { font-size: 14px; }
+  .featureTopbar p { color: var(--muted); }
+  .featureBody { max-width: 1220px; padding-top: 30px; }
+  .statusPill { background: #17372b; color: var(--accent); }
+  .statusPill.warn { background: #342d18; color: var(--warn); }
+  .statusPill.info { background: #182e37; color: var(--blue); }
+  .quickCapture input, .settingRow input, .settingRow select,
+  .modalCard input, .modalCard select, .modalCard textarea { background: var(--panel); border-color: var(--border); }
+  .statsBand, .overviewList, .healthList, .runtimeList, .settingsSection, .engineRows { border-color: var(--border); }
+  .statItem, .overviewRow, .healthRow, .runtimeRow, .engineRow { border-color: var(--border); }
+  .overviewRow, .healthRow, .runtimeRow { transition: background .14s ease; }
+  .overviewRow:hover, .runtimeRow:hover { background: rgba(255,255,255,.018); }
+  .resumeBand {
+    display: grid; grid-template-columns: 4px minmax(0,1fr) auto; gap: 16px; align-items: center;
+    margin: 0 0 24px; padding: 15px 0; border-block: 1px solid var(--border);
+  }
+  .resumeAccent { width: 4px; align-self: stretch; border-radius: 2px; background: var(--accent); }
+  .resumeBand h3 { margin: 3px 0 4px; color: var(--head); font-size: 14px; }
+  .resumeBand p { color: var(--sec); font-size: 12px; line-height: 1.5; }
+  .resumeMeta { margin-top: 7px; color: var(--muted); font-size: 10.5px; }
+  .runtimeMark { border-radius: 6px; background: #17372b; color: var(--accent); }
+  .runtimeMark.missing { background: #342d18; color: var(--warn); }
+  .runtimeProgress span { background: var(--accent); }
+  .dropZone { background: var(--panel); border-color: var(--border2); }
+  #titlebar { min-height: 64px; padding: 0 20px; border-bottom-color: var(--border); font-size: 15px; }
+  #rightPanel { background: var(--panel); border-left-color: var(--border); }
+  #editor, #preview { max-width: 880px; }
+  #mapBar { display: none !important; }
+  #mapFrame { width: 100%; height: 100%; flex: 1; background: var(--bg); }
+  #mapOverlay { overflow: hidden; }
+  #vault .modalCard, #tools .modalCard, #ai .modalCard { max-width: 1040px; }
+  #tools .modalCard, #ai .modalCard { max-width: 820px; }
+  #vault .modalCard > h2, #tools .modalCard > h2, #ai .modalCard > h2 { min-height: 44px; }
+  #vLocked { margin-top: 36px; }
+  #noteMenu, #autoc { background: var(--panel); border-color: var(--border2); }
+  #login { background: var(--bg); }
+  #login input { background: var(--panel); border-color: var(--border); }
+  #bottomNav { background: #141617; border-top-color: var(--border); }
+  #bottomNav button span { display: grid; place-items: center; filter: none; color: var(--muted); }
+  #bottomNav button.act span, #bottomNav button.act b { color: var(--accent); }
+  #bottomNav #navFab { background: var(--head); color: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.34); }
+  @media (max-width: 720px) {
+    #sidebar { left: 0; }
+    .featureTopbar { min-height: 56px; }
+    #mapOverlay { padding-bottom: 66px; }
+    .resumeBand { grid-template-columns: 4px minmax(0,1fr); }
+    .resumeBand .sBtn { grid-column: 2; justify-self: start; }
+  }
 </style>
 </head>
-<body>
+<body data-view="overview">
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <symbol id="app-brain" viewBox="0 0 24 24"><path d="M9.5 4A3.5 3.5 0 0 0 6 7.5c0 .4.07.78.19 1.14A3.5 3.5 0 0 0 7.5 15H9v2.5a2.5 2.5 0 0 0 5 0V15h1.5a3.5 3.5 0 0 0 1.31-6.36A3.5 3.5 0 0 0 13.5 4c-.57 0-1.1.14-1.57.38A3.47 3.47 0 0 0 9.5 4Z"/><path d="M9 9.5h6M12 6v9"/></symbol>
+    <symbol id="app-home" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M9 22V12h6v10"/></symbol>
+    <symbol id="app-note" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></symbol>
+    <symbol id="app-map" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="m7 7.2 3.7 8.1M17 7.2l-3.7 8.1M7 6h10"/></symbol>
+    <symbol id="app-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4M12 15v3"/></symbol>
+    <symbol id="app-tool" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5-5L7 4l3 3-2.5 2.5-3-3-2.7 2.7a4 4 0 0 0 5 5l8.5 8.5a2 2 0 0 0 2.8-2.8Z"/></symbol>
+    <symbol id="app-spark" viewBox="0 0 24 24"><path d="m12 3-1.2 4.1a5.2 5.2 0 0 1-3.7 3.7L3 12l4.1 1.2a5.2 5.2 0 0 1 3.7 3.7L12 21l1.2-4.1a5.2 5.2 0 0 1 3.7-3.7L21 12l-4.1-1.2a5.2 5.2 0 0 1-3.7-3.7Z"/></symbol>
+    <symbol id="app-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></symbol>
+    <symbol id="app-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></symbol>
+    <symbol id="app-sync" viewBox="0 0 24 24"><path d="M20 7h-9M17 4l3 3-3 3M4 17h9M7 20l-3-3 3-3"/></symbol>
+    <symbol id="app-settings" viewBox="0 0 24 24"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4A2 2 0 0 0 4 9.9l.2.1a2 2 0 0 1 1 1.7v.6a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.6a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="app-menu" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="app-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  </svg>
   <div id="login" style="display:none">
-    <div style="font-size:40px">🔒</div>
-    <input id="loginInput" type="password" placeholder="Parola" autofocus>
+    <div id="loginMark">NS</div>
+    <h1>Notlar Sync</h1>
+    <p>Kişisel bilgi alanına bağlan</p>
+    <input id="loginInput" type="password" placeholder="Ana parola veya cihaz anahtarı" autocomplete="current-password" autofocus>
     <div id="loginErr"></div>
   </div>
-  <div id="sidebar">
-    <header>Notlar <span style="display:flex;gap:10px">
-      <button id="docBtn" title="Belge ekle — PDF/görsel/ses/video yerel AI ile nota çevrilir (zihin-haritasi motoru)" style="display:none">📎</button>
-      <button id="mapBtn" title="Zihin haritası">🕸️</button>
-      <button id="vaultBtn" title="Şifre kasası">🔐</button>
-      <button id="toolsBtn" title="Kodlama araçları">🧰</button>
-      <button id="aiBtn" title="Çeviri / AI">🤖</button>
-      <button id="setBtn" title="Ayarlar">⚙</button>
-      <button id="newBtn" title="Yeni not — kutuya URL yapıştırırsan sayfayı indirip nota çevirir">+</button>
-    </span></header>
-    <div id="newRow"><input id="newInput" placeholder="Not adı ya da URL, Enter'a bas"></div>
-    <div id="searchRow"><input id="searchBox" placeholder="🔍 ara — ad + içerik"></div>
+
+  <nav id="rail" aria-label="Ana menü">
+    <button id="railLogo" class="active" aria-label="Genel Bakış" title="Genel Bakış"><svg class="appIcon"><use href="#app-brain"/></svg></button>
+    <button id="notesBtn" class="railBtn" aria-label="Notlar" title="Notlar"><svg class="appIcon"><use href="#app-note"/></svg></button>
+    <button id="mapBtn" class="railBtn" aria-label="AI Beyni" title="AI Beyni"><svg class="appIcon"><use href="#app-map"/></svg></button>
+    <button id="vaultBtn" class="railBtn" aria-label="Şifre Kasası" title="Şifre Kasası"><svg class="appIcon"><use href="#app-lock"/></svg></button>
+    <button id="toolsBtn" class="railBtn" aria-label="Kodlama Araçları" title="Kodlama Araçları"><svg class="appIcon"><use href="#app-tool"/></svg></button>
+    <button id="aiBtn" class="railBtn" aria-label="Yerel AI" title="Yerel AI"><svg class="appIcon"><use href="#app-spark"/></svg></button>
+    <button id="docBtn" class="railBtn" aria-label="Belge Ekle" title="Belge Ekle"><svg class="appIcon"><use href="#app-upload"/></svg></button>
+    <button id="runtimeBtn" class="railBtn" aria-label="Kurulum Merkezi" title="Kurulum Merkezi"><svg class="appIcon"><use href="#app-download"/></svg></button>
+    <button id="syncBtn" class="railBtn" aria-label="Senkron ve Cihazlar" title="Senkron ve Cihazlar"><svg class="appIcon"><use href="#app-sync"/></svg></button>
+    <div class="railSpacer"></div>
+    <div id="railSync" title="Senkron durumu"><span id="dot"></span><span>canlı</span></div>
+    <button id="setBtn" class="railBtn" aria-label="Ayarlar" title="Ayarlar"><svg class="appIcon"><use href="#app-settings"/></svg></button>
+  </nav>
+
+  <section id="overviewView" class="featureView" aria-labelledby="overviewTitle">
+    <header class="featureTopbar"><h1 id="overviewTitle">Genel Bakış</h1><p>Notların, hafızan ve bağlantılarının bugünkü durumu</p><span class="spacer"></span><span id="overviewSync" class="statusPill info">bağlanıyor</span></header>
+    <div class="featureBody">
+      <div class="overviewHero">
+        <div><span class="eyebrow">Kişisel bilgi alanın</span><h2>Tekrar hoş geldin</h2><p>Son kaldığın yerden devam et veya hızlı bir not yakala.</p></div>
+        <div class="quickCapture"><input id="quickInput" placeholder="Not adı ya da URL"><button id="quickAdd" class="sBtn">Ekle</button></div>
+      </div>
+      <section class="resumeBand" aria-labelledby="resumeTitle">
+        <span class="resumeAccent"></span>
+        <div><span class="eyebrow" id="resumeType">AI CHECKPOINT</span><h3 id="resumeTitle">Son oturum yükleniyor</h3><p id="resumeSummary">Kalıcı bağlam kontrol ediliyor.</p><div id="resumeMeta" class="resumeMeta"></div></div>
+        <button id="brainResumeBtn" class="sBtn">AI Beyni'ni aç</button>
+      </section>
+      <div class="statsBand" id="statsBand">
+        <div class="statItem"><span class="statValue" data-stat="notes">0</span><span class="statLabel">not</span></div>
+        <div class="statItem"><span class="statValue" data-stat="links">0</span><span class="statLabel">bağlantı</span></div>
+        <div class="statItem"><span class="statValue" data-stat="pendingSuggestions">0</span><span class="statLabel">AI önerisi</span></div>
+        <div class="statItem"><span class="statValue" data-stat="orphans">0</span><span class="statLabel">bağlantısız</span></div>
+        <div class="statItem"><span class="statValue" data-stat="brokenLinks">0</span><span class="statLabel">kırık link</span></div>
+        <div class="statItem"><span class="statValue" data-stat="trash">0</span><span class="statLabel">çöpte</span></div>
+      </div>
+      <div class="overviewGrid">
+        <section><div class="sectionHeader"><h3>Son düzenlenenler</h3><button id="allNotesBtn" class="textBtn">Tüm notlar</button></div><div id="recentNotes" class="overviewList"></div></section>
+        <aside>
+          <div class="sectionHeader"><h3>Sabitlenenler</h3></div><div id="pinnedNotes" class="overviewList"></div>
+          <div class="sectionHeader" style="margin-top:26px"><h3>Sistem sağlığı</h3></div><div id="healthList" class="healthList"></div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <aside id="sidebar">
+    <div id="searchRow"><input id="searchBox" placeholder="Notlarda ara…" aria-label="Notlarda ara"></div>
+    <div id="folderTools"><button id="rootFolderBtn" class="miniBtn" title="Ana not dizini" aria-label="Ana not dizini">⌂</button><button id="newFolderBtn" class="miniBtn" title="Yeni klasör">＋ Klasör</button><button id="obsidianOpenBtn" class="miniBtn" title="Obsidian kasasını içe aktar">İçe aktar</button><span id="selectedFolderLabel">Tüm notlar</span></div>
+    <div id="folderCreateRow"><input id="folderInput" placeholder="Klasör adı"><button id="folderCreateOk" class="miniBtn">Ekle</button><button id="folderCreateCancel" class="miniBtn">×</button></div>
     <div id="noteList"></div>
-    <div id="status"><span id="dot"></span><span id="statusText">Bağlanıyor...</span></div>
-  </div>
-  <!-- ZIHIN HARITASI (tam ekran) -->
-  <div id="mapOverlay">
-    <div id="mapBar">
-      <strong>🌌 bilgi haritan</strong>
-      <span style="flex:1"></span>
-      <button id="evrenBtn" title="Evren modu — konu güneş sistemleri, notlar gezegen (canlı)">🌌 Evren</button>
-      <button id="graphifyBtn" title="Graphify görünümü — kod/bilgi grafiği, topluluk filtresi + arama (graphify motoru)">🧬 Graphify</button>
-      <button id="graphifyRebuild" title="Graphify grafiğini yeniden kur (güncel koddan)">↻</button>
-      <button id="mapClose">✕ notlara geç</button>
-    </div>
-    <iframe id="mapFrame" title="Zihin Haritası"></iframe>
-  </div>
-  <!-- EŞLEŞTIRME ONAY KUTUSU (yeni cihaz bağlanmak isteyince açılır) -->
-  <div id="pairModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:60;align-items:center;justify-content:center">
-    <div style="background:var(--bg2,#262626);border:1px solid var(--border,#3f3f3f);border-radius:12px;padding:24px;width:340px;text-align:center">
-      <div style="font-size:40px">📱</div>
-      <h2 style="font-size:18px;margin:8px 0"><span id="pairCihazAd"></span> bağlanmak istiyor</h2>
-      <p style="font-size:13px;color:var(--muted,#999);margin-bottom:16px">Kod: <b id="pairModalKod"></b> · Bu cihazı sen mi bağlıyorsun? Onaylarsan notlarına erişebilecek.</p>
-      <div style="display:flex;gap:10px">
-        <button class="sBtn" id="pairOnay" style="flex:1">✓ Onayla</button>
-        <button class="sBtn gri" id="pairRet" style="flex:1">✗ Reddet</button>
-      </div>
-      <div id="pairModalDurum" style="font-size:12px;color:var(--muted,#999);margin-top:10px"></div>
+    <button id="trashBtn" class="miniBtn" style="margin:6px 12px 0">Çöp Kutusu <span id="trashCount"></span></button>
+    <div id="newRow"><input id="newInput" placeholder="Not adı ya da URL, Enter'a bas"></div>
+    <button id="newBtn" title="Yeni not; URL yapıştırırsan sayfayı nota çevirir">+ Yeni not</button>
+    <div id="status"><span id="statusText">Bağlanıyor…</span></div>
+  </aside>
+
+  <section id="mapOverlay" class="featureView" aria-label="AI Beyni">
+    <div id="mapBar"><button id="evrenBtn">Evren</button><button id="graphifyBtn">Graphify</button><button id="graphifyRebuild">↻</button><button id="mapClose">Notlara geç</button></div>
+    <iframe id="mapFrame" title="AI Beyni"></iframe>
+  </section>
+
+  <div id="pairModal" role="dialog" aria-modal="true" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:60;align-items:center;justify-content:center">
+    <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:24px;width:360px;text-align:center">
+      <div style="font-size:32px">⇄</div><h2 style="font-size:18px;margin:8px 0"><span id="pairCihazAd"></span> bağlanmak istiyor</h2>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Kod: <b id="pairModalKod"></b>. Onaylarsan bu cihaz notlarına erişebilecek.</p>
+      <div class="row"><button class="sBtn" id="pairOnay" style="flex:1">Onayla</button><button class="sBtn gri" id="pairRet" style="flex:1">Reddet</button></div>
+      <div id="pairModalDurum" style="font-size:12px;color:var(--muted);margin-top:10px"></div>
     </div>
   </div>
-  <div id="settings">
-    <div id="settingsCard">
-      <h2>Ayarlar <button id="kapatSet" title="Kapat">✕</button></h2>
 
-      <div class="sBlok" style="border-top:none;padding-top:0">
-        <h3>Başka cihaz eşleştir</h3>
-        <p>Tek kullanımlık 6 haneli kod üretilir. Yeni cihaz bu kodu girer, <b>iki cihaz da onaylar</b>, sonra kod yok olur. Parolan cihazdan cihaza <b>hiç taşınmaz</b> — her cihaz kendi iptal edilebilir anahtarını alır.</p>
-        <div id="pairKod" style="display:none;font-size:32px;letter-spacing:6px;text-align:center;font-family:monospace;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px"></div>
-        <div id="pairKodNot" style="display:none;font-size:12px;color:var(--muted);text-align:center;margin-bottom:8px"></div>
-        <button class="sBtn" id="kodBtn">Eşleştirme kodu üret</button>
-      </div>
-
-      <div class="sBlok" id="cihazBlok">
-        <h3>Bağlı cihazlar</h3>
-        <p>Bu beyne erişimi olan cihazlar. Birini kaybedersen sadece onun anahtarını iptal et — diğerleri etkilenmez.</p>
-        <div id="cihazListe" style="font-size:13px">yükleniyor…</div>
-      </div>
-
-      <div class="sBlok">
-        <h3>AI Hafızası</h3>
-        <p>AI ajanlarının otomatik tuttuğu notlar. Kenar çubuğunda gizli; buradan açıp okuyabilirsin.</p>
-        <div id="hidList"></div>
-        <div id="hidBos" style="font-size:13px;color:var(--muted)">Henüz AI notu yok.</div>
+  <section id="settings" class="featureView" aria-label="Senkron ve Cihazlar">
+    <div style="width:100%"><header class="featureTopbar"><h1>Senkron ve Cihazlar</h1><p>Bu bilgi alanına erişen cihazları yönet</p><span class="spacer"></span><span id="syncRole" class="statusPill info">host</span></header>
+      <div id="settingsCard"><h2>Senkron <button id="kapatSet">✕</button></h2>
+        <div class="sBlok" style="border-top:none;padding-top:0"><h3>Başka cihaz eşleştir</h3><p>Tek kullanımlık 6 haneli kod üret. Yeni cihaz ve bu ana cihaz ayrı ayrı onay verdiğinde cihaza iptal edilebilir özel anahtar atanır.</p>
+          <div id="pairKod" style="display:none;font-size:32px;letter-spacing:0;text-align:center;font-family:var(--mono);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:14px;margin-bottom:8px"></div>
+          <div id="pairKodNot" style="display:none;font-size:12px;color:var(--muted);text-align:center;margin-bottom:8px"></div><button class="sBtn" id="kodBtn">Eşleştirme kodu üret</button>
+        </div>
+        <div class="sBlok" id="cihazBlok"><h3>Bağlı cihazlar</h3><p>Bir cihazı kaybedersen yalnızca onun erişimini iptal et.</p><div id="cihazListe" style="font-size:13px">yükleniyor…</div></div>
       </div>
     </div>
-  </div>
-  <!-- ŞİFRE KASASI -->
-  <div id="vault" class="modal"><div class="modalCard">
-    <h2>🔐 Şifre Kasası <button class="kapatX" data-close="vault">✕</button></h2>
+  </section>
+
+  <section id="appSettings" class="featureView" aria-labelledby="settingsTitle">
+    <header class="featureTopbar"><h1 id="settingsTitle">Ayarlar</h1><p id="settingsDataDir"></p><span class="spacer"></span><button id="settingSave" class="sBtn">Değişiklikleri kaydet</button></header>
+    <div class="featureBody settingsGrid">
+      <div>
+        <section class="settingsSection"><h3>Çalışma modu</h3><div class="settingRow"><label>Bu cihaz<small>Ana cihaz notları sunar; istemci ana cihaza bağlanır.</small></label><select id="settingMode"><option value="host">Ana cihaz</option><option value="client">İstemci</option></select></div><div class="settingRow"><label>Sunucu adresi</label><input id="settingServer" placeholder="http://100.x.x.x:7777"></div><div class="settingRow"><label>Port</label><input id="settingPort" type="number" min="1024" max="65535"></div></section>
+        <section class="settingsSection"><h3>Yedek ve zihin</h3><div class="settingRow"><label>GitHub otomatik yedek<small>Değişiklikler sessizlikten sonra push edilir.</small></label><input id="settingGit" type="checkbox"></div><div class="settingRow"><label>Otomatik bağlantı önerileri</label><input id="settingOto" type="checkbox"></div><div class="settingRow"><label>Yerel cevap modeli</label><input id="settingModel" placeholder="qwen3:8b"></div></section>
+        <section class="settingsSection"><h3>Güvenlik</h3><div class="settingRow"><label>Yeni ana parola<small>Boş bırakırsan mevcut parola korunur.</small></label><input id="settingPassword" type="password" minlength="12" autocomplete="new-password"></div></section>
+        <div id="settingsFeedback" style="font-size:12px;color:var(--muted);min-height:18px"></div>
+      </div>
+      <aside>
+        <section class="settingsSection"><h3>Servisler</h3><div class="healthRow"><span>Local AI / Ollama</span><span id="ollamaState" class="statusPill warn">kontrol ediliyor</span></div><div class="healthRow"><span>Belge motoru</span><span id="motorState" class="statusPill warn">kontrol ediliyor</span></div></section>
+        <section class="settingsSection"><h3>AI Beyni</h3><div class="healthRow"><span>Kalıcı hafıza</span><span id="settingsMemoryCount" class="statusPill info">kontrol ediliyor</span></div><div class="healthRow"><span>Checkpointler</span><span id="settingsCheckpointCount" class="statusPill info">kontrol ediliyor</span></div><div class="healthRow"><span>AI bağlantıları</span><span id="settingsIntegrationState" class="statusPill warn">kontrol ediliyor</span></div><button id="settingsBrainBtn" class="miniBtn" style="margin-top:10px">AI Beyni'ni yönet</button></section>
+        <section class="settingsSection"><h3>Eski gizli AI notları</h3><div id="hidList"></div><div id="hidBos" style="font-size:12px;color:var(--muted)">Eski formatta AI notu yok.</div></section>
+      </aside>
+    </div>
+  </section>
+
+  <section id="vault" class="modal" aria-label="Şifre Kasası"><header class="featureTopbar"><h1>Şifre Kasası</h1><p>İstemci tarafında şifrelenen yerel kayıtlar</p><span class="spacer"></span><span class="statusPill">sıfır bilgi</span></header><div class="modalCard">
+    <h2 class="legacyHeading">Şifre Kasası <button class="kapatX" data-close="vault">✕</button></h2>
     <div id="vLocked">
-      <p style="font-size:13px;color:var(--muted)">Ana parola ile açılır. Şifreleme cihazında yapılır; sunucu içeriği göremez.</p>
-      <div id="vNew" style="display:none;font-size:13px;color:#e0b050">İlk kez: güçlü bir ana parola belirle. <b>Unutursan kasa açılmaz</b> (geri kurtarma yok).</div>
-      <input id="vMaster" type="password" placeholder="Ana parola" style="margin-top:8px">
-      <div id="vErr" style="color:#e74c3c;font-size:13px;min-height:16px"></div>
+      <p style="font-size:13px;color:var(--muted)">Kasa ana parolası uygulama girişinden bağımsızdır ve yalnızca bu cihazda şifreleme anahtarı üretir.</p>
+      <div id="vNew" style="display:none;font-size:13px;color:#e0b050">İlk kullanım: en az 12 karakterli bir kasa ana parolası belirle. Bu parola kurtarılamaz.</div>
+      <input id="vMaster" type="password" placeholder="Kasa ana parolası" style="margin-top:8px" autocomplete="current-password">
+      <input id="vMasterConfirm" type="password" placeholder="Kasa ana parolasını tekrar yaz" style="display:none;margin-top:8px" autocomplete="new-password">
+      <div id="vErr" style="color:#e77d75;font-size:13px;min-height:16px"></div>
       <button class="sBtn" id="vUnlock" style="width:100%">Kasayı aç</button>
-    </div>
-    <div id="vOpen" style="display:none">
-      <div id="vPending" style="display:none;background:#2c2a1a;border:1px solid #6b5d1f;border-radius:8px;padding:10px 12px;margin-bottom:8px"></div>
-      <div class="row">
-        <input id="vSearch" placeholder="Ara...">
-        <button class="miniBtn" id="vLock">🔒 Kilitle</button>
-      </div>
-      <div id="vList"></div>
-      <div class="sBlok" style="border-top:1px solid var(--border);padding-top:12px">
-        <h3>Ekle</h3>
-        <div class="row" style="margin-bottom:6px"><input id="eTitle" placeholder="Başlık (ör. GitHub)"><input id="eUrl" placeholder="site (opsiyonel)"></div>
-        <div class="row" style="margin-bottom:6px"><input id="eUser" placeholder="kullanıcı adı / e-posta"></div>
-        <div class="row"><input id="ePass" placeholder="şifre"><button class="miniBtn" id="eGen">🎲 Üret</button><button class="sBtn" id="eAdd">Kaydet</button></div>
-      </div>
-      <div class="sBlok" style="border-top:1px solid var(--border);padding-top:12px">
-        <h3>Toplu içe aktar (tek tek yazma)</h3>
-        <p style="font-size:12px;color:var(--muted)">Chrome/Firefox/Bitwarden vb. → şifreleri CSV olarak dışa aktar → buraya yükle.</p>
-        <input id="vCsv" type="file" accept=".csv">
+      <div id="vResetWrap" style="display:none">
+        <button class="miniBtn" id="vResetStart">Ana parolayı unuttum</button>
+        <div id="vResetConfirm" style="display:none">
+          <p style="font-size:12px;color:#e7b1aa;margin-bottom:8px">Mevcut şifreli kasa yerel yedeğe alınır ve yeni, boş bir kasa oluşturabilmen için aktif kasa sıfırlanır.</p>
+          <div class="row"><input id="vResetText" placeholder="Onay için SIFIRLA yaz"><button class="sBtn" id="vResetDo">Sıfırla</button><button class="miniBtn" id="vResetCancel">Vazgeç</button></div>
+        </div>
       </div>
     </div>
-  </div></div>
+    <div id="vOpen" style="display:none"><div id="vPending" style="display:none;background:#2c2a1a;border:1px solid #6b5d1f;border-radius:7px;padding:10px 12px;margin-bottom:8px"></div><div class="row"><input id="vSearch" placeholder="Kasada ara"><button class="miniBtn" id="vLock">Kilitle</button></div><div id="vSaveErr" style="color:#e77d75;font-size:12px;min-height:16px;margin-top:6px"></div><div id="vList"></div>
+      <div class="sBlok" id="vEntryForm"><h3 id="eFormTitle">Kayıt ekle</h3><div class="row" style="margin-bottom:6px"><input id="eTitle" placeholder="Başlık"><input id="eUrl" placeholder="Site"></div><div class="row" style="margin-bottom:6px"><input id="eUser" placeholder="Kullanıcı adı / e-posta"></div><div class="row"><input id="ePass" type="password" placeholder="Şifre" autocomplete="new-password"><button class="miniBtn" id="eGen">Üret</button><button class="sBtn" id="eAdd">Kaydet</button><button class="miniBtn" id="eCancel" style="display:none">Vazgeç</button></div></div>
+      <div class="sBlok"><h3>CSV içe aktar</h3><p style="font-size:12px;color:var(--muted)">İçe aktarma tamamlandıktan sonra düz CSV dosyasını güvenli biçimde sil.</p><input id="vCsv" type="file" accept=".csv,text/csv" hidden><div class="row"><button id="vCsvBtn" class="miniBtn">CSV seç</button><span id="vCsvName" style="font-size:12px;color:var(--muted)">Dosya seçilmedi</span></div></div>
+      <div class="sBlok"><h3>Kasa güvenliği</h3><div class="vaultPasswordGrid"><input id="vNewPass" type="password" minlength="12" placeholder="Yeni kasa ana parolası" autocomplete="new-password"><input id="vNewPassConfirm" type="password" minlength="12" placeholder="Yeni parolayı tekrar yaz" autocomplete="new-password"><button class="miniBtn" id="vChangePass">Ana parolayı değiştir</button></div><div id="vPassMsg" style="font-size:12px;min-height:16px;margin-top:6px;color:var(--muted)"></div></div>
+    </div>
+  </div></section>
 
-  <!-- KODLAMA ARAÇLARI -->
-  <div id="tools" class="modal"><div class="modalCard">
-    <h2>🧰 Kodlama / Şifre Araçları <button class="kapatX" data-close="tools">✕</button></h2>
-    <textarea id="tIn" rows="4" placeholder="Metni buraya yaz..."></textarea>
-    <div class="row">
-      <select id="tSel"></select>
-      <input id="tOpt" placeholder="" style="display:none;max-width:160px">
-    </div>
-    <div class="row">
-      <button class="sBtn" id="tEnc">→ Çevir (encode)</button>
-      <button class="sBtn gri" id="tDec">← Çöz (decode)</button>
-      <button class="miniBtn" id="tMagic">✨ Sihirli çöz</button>
-    </div>
-    <textarea id="tOut" rows="4" readonly placeholder="Sonuç..."></textarea>
-    <button class="miniBtn" id="tCopy" style="align-self:flex-start">Kopyala</button>
-  </div></div>
+  <section id="tools" class="modal" aria-label="Kodlama Araçları"><header class="featureTopbar"><h1>Kodlama Araçları</h1><p>Yerel dönüştürme ve çözümleme araçları</p><span class="spacer"></span><span class="statusPill">çevrimdışı</span></header><div class="modalCard"><h2 class="legacyHeading">Kodlama Araçları <button class="kapatX" data-close="tools">✕</button></h2><textarea id="tIn" rows="9" placeholder="Girdi"></textarea><div class="row"><select id="tSel"></select><input id="tOpt" placeholder="" style="display:none;max-width:180px"></div><div class="row"><button class="sBtn" id="tEnc">Encode</button><button class="sBtn gri" id="tDec">Decode</button><button class="miniBtn" id="tMagic">Sihirli çöz</button></div><textarea id="tOut" rows="10" readonly placeholder="Çıktı"></textarea><button class="miniBtn" id="tCopy" style="align-self:flex-start">Kopyala</button></div></section>
 
-  <!-- ÇEVİRİ / AI -->
-  <div id="ai" class="modal"><div class="modalCard">
-    <h2>🤖 Çeviri / AI <span style="font-size:11px;color:var(--muted)">local Ollama</span> <button class="kapatX" data-close="ai">✕</button></h2>
-    <textarea id="aIn" rows="4" placeholder="İngilizce metin (çeviri) veya AI'a soru..."></textarea>
-    <div class="row">
-      <select id="aModel"><option value="qwen3:8b">qwen3:8b (kaliteli)</option><option value="qwen2.5:3b">qwen2.5:3b (hızlı)</option></select>
-    </div>
-    <div class="row">
-      <button class="sBtn" id="aTrans">🇬🇧→🇹🇷 Çevir</button>
-      <button class="sBtn gri" id="aAsk">AI'a sor</button>
-    </div>
-    <textarea id="aOut" rows="6" readonly placeholder="Cevap..."></textarea>
-    <button class="miniBtn" id="aCopy" style="align-self:flex-start">Kopyala</button>
-  </div></div>
+  <section id="ai" class="modal" aria-label="Yerel AI"><header class="featureTopbar"><h1>Yerel AI</h1><p>Veriyi cihazdan çıkarmayan model çalışma alanı</p><span class="spacer"></span><span id="aiState" class="statusPill warn">Ollama kontrol ediliyor</span></header><div class="modalCard"><h2 class="legacyHeading">Yerel AI <button class="kapatX" data-close="ai">✕</button></h2><select id="aModel"></select><textarea id="aIn" rows="9" placeholder="Çevirilecek metin veya soru"></textarea><div class="row"><button class="sBtn" id="aTrans">EN → TR Çeviri</button><button class="sBtn gri" id="aAsk">AI'a sor</button></div><textarea id="aOut" rows="12" readonly placeholder="Cevap"></textarea><button class="miniBtn" id="aCopy" style="align-self:flex-start">Kopyala</button></div></section>
 
-  <div id="main">
-    <div id="titlebar"><button id="burger" title="Not listesi">☰</button><span id="titleText"></span><button id="previewBtn" title="Önizleme — markdown görünümü, [[link]]ler tıklanır (Ctrl+E)">👁 önizle</button></div>
-    <div id="backlinks"></div>
-    <textarea id="editor" placeholder="Yazmaya başla...  ([[ yazınca not önerilir · Ctrl+tık: linke git · görsel yapıştırılabilir)" style="display:none" spellcheck="false"></textarea>
-    <div id="preview"></div>
-    <div id="empty"><div style="font-size:40px">🗒️</div>Soldan bir not seç veya + ile yeni not aç</div>
-    <div id="autoc"></div>
-  </div>
+  <section id="documentView" class="featureView" aria-labelledby="documentTitle"><header class="featureTopbar"><h1 id="documentTitle">Belge Ekle</h1><p>PDF, görsel, ses veya videoyu bağlantılı nota dönüştür</p><span class="spacer"></span><span id="docEngineState" class="statusPill warn">motor kontrol ediliyor</span></header><div class="featureBody"><div id="docDrop" class="dropZone" tabindex="0" role="button"><strong>Dosyayı buraya sürükle veya seç</strong><span>PDF · PNG/JPG · MP3/WAV · MP4</span><button id="docPickBtn" class="sBtn">Dosya seç</button></div><div class="engineRows"><div class="engineRow"><span>PDF metni</span><span>pdftotext</span></div><div class="engineRow"><span>Ses ve video</span><span>Whisper</span></div><div class="engineRow"><span>Görsel kavramları</span><span>Yerel vision modeli</span></div></div><div id="docProgress"></div></div></section>
+
+  <section id="runtimeView" class="featureView" aria-labelledby="runtimeTitle">
+    <header class="featureTopbar"><h1 id="runtimeTitle">Kurulum Merkezi</h1><p>Notlar Sync özelliklerinin yerel çalışma bileşenleri</p><span class="spacer"></span><span id="runtimeState" class="statusPill info">kontrol ediliyor</span></header>
+    <div class="featureBody runtimeWrap">
+      <div class="runtimeActions"><button id="runtimeInstallAll" class="sBtn">Eksiklerin tümünü kur</button><button id="runtimeRefresh" class="miniBtn">Yeniden kontrol et</button><button id="runtimeCancel" class="miniBtn" style="display:none">Kurulumu durdur</button></div>
+      <div id="runtimeList" class="runtimeList"></div>
+      <div id="runtimeTask" style="display:none;margin-top:22px"><div class="sectionHeader"><h3 id="runtimeStep">Hazırlanıyor</h3><span id="runtimePercent" class="statusPill info">0%</span></div><div class="runtimeProgress"><span id="runtimeProgressBar"></span></div><pre id="runtimeLog"></pre></div>
+      <section class="settingsSection" style="margin-top:28px"><div class="sectionHeader"><h3>Obsidian kasalarını içe aktar</h3><button id="obsidianRefresh" class="textBtn">Yeniden tara</button></div><div id="obsidianVaults"></div><div id="obsidianFeedback" style="font-size:12px;color:var(--muted);min-height:18px;margin-top:8px"></div></section>
+    </div>
+  </section>
+
+  <main id="main">
+    <div id="titlebar"><button id="burger" title="Not listesi" aria-label="Not listesini aç">☰</button><span id="titleText"></span><div id="titleActions"><button id="pinBtn" class="miniBtn" title="Sabitle" aria-label="Notu sabitle">☆</button><button id="previewBtn" title="Okuma veya düzenleme (Ctrl+E)">Düzenle</button><button id="noteMoreBtn" class="miniBtn" title="Not işlemleri" aria-label="Not işlemleri">•••</button></div></div>
+    <div id="contentRow"><div id="contentCol"><div id="backlinks" style="display:none"></div><textarea id="editor" placeholder="Yazmaya başla…" style="display:none" spellcheck="true"></textarea><div id="preview"></div><div id="empty"><strong>Bir not seç veya yeni bir not oluştur</strong><button id="emptyNewBtn" class="sBtn">Yeni not</button></div></div><aside id="rightPanel"><div class="rpHead">BAĞLANTILAR</div><div id="blPanel"></div><div class="rpHead" style="margin-top:20px">HARİTADA</div><div id="rpMap"><span>Zihin haritasında aç</span></div></aside></div>
+    <div id="autoc"></div><div id="noteMenu"><button id="renameNoteBtn">Yeniden adlandır</button><button id="duplicateNoteBtn">Kopyasını oluştur</button><button id="deleteNoteBtn" class="danger">Çöp kutusuna taşı</button></div><section id="trashPanel"><div class="sectionHeader"><h3>Çöp Kutusu</h3><button id="trashClose" class="textBtn">Kapat</button></div><div id="trashList"></div></section>
+  </main>
+
+  <div id="mobileMenu" class="modal" style="z-index:70"><div class="modalCard" style="max-width:360px"><h2>Menü <button id="mobileMenuClose" class="kapatX">✕</button></h2><button class="sBtn gri" data-mobile-view="overview">Genel Bakış</button><button class="sBtn gri" data-mobile-view="tools">Kodlama Araçları</button><button class="sBtn gri" data-mobile-view="ai">Yerel AI</button><button class="sBtn gri" data-mobile-view="document">Belge Ekle</button><button class="sBtn gri" data-mobile-view="runtime">Kurulum Merkezi</button><button class="sBtn gri" data-mobile-view="sync">Senkron ve Cihazlar</button><button class="sBtn gri" data-mobile-view="settings">Ayarlar</button></div></div>
+  <nav id="bottomNav" aria-label="Mobil menü"><button data-nav="notes" class="act"><span><svg class="appIcon"><use href="#app-note"/></svg></span><b>Notlar</b></button><button data-nav="map"><span><svg class="appIcon"><use href="#app-map"/></svg></span><b>AI Beyni</b></button><button id="navFab" title="Yeni not" aria-label="Yeni not"><svg class="appIcon"><use href="#app-plus"/></svg></button><button data-nav="vault"><span><svg class="appIcon"><use href="#app-lock"/></svg></span><b>Kasa</b></button><button data-nav="menu"><span><svg class="appIcon"><use href="#app-menu"/></svg></span><b>Menü</b></button></nav>
 
 <script src="tools.js"></script>
 <script src="vault.js"></script>
 <script>
 let ws, current = null, notes = [];
-let loaded = false;  // acik notun icerigi sunucudan geldi mi (gelmeden yazilan tus eski notu tasimasin)
-let dirty = false;   // baglanti yokken yazilan degisiklik var mi
-let baseHash = '';   // sunucuyla en son mutabik kaldigimiz icerigin ozeti (cakisma tespiti)
+let loaded = false;
+let dirty = false;
+let awaitingSafe = false;
+let baseHash = '';
+let wsAuthed = false;
+let sessionRole = 'device';
+let reconnectTimer = null;
 const $ = (id) => document.getElementById(id);
+
+const cacheDb = new Promise((resolve, reject) => {
+  if (!window.indexedDB) return reject(new Error('IndexedDB yok'));
+  const req = indexedDB.open('notlar-sync', 1);
+  req.onupgradeneeded = () => {
+    const db = req.result;
+    if (!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', { keyPath: 'name' });
+    if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+  };
+  req.onsuccess = () => resolve(req.result);
+  req.onerror = () => reject(req.error);
+});
+function cacheRun(store, mode, action) {
+  return cacheDb.then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(store, mode);
+    const req = action(tx.objectStore(store));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  })).catch(() => null);
+}
+const cacheNoteGet = (name) => cacheRun('notes', 'readonly', (s) => s.get(name));
+const cacheNoteDelete = (name) => cacheRun('notes', 'readwrite', (s) => s.delete(name));
+const cacheNotePut = (name, content, base, isDirty) => cacheRun('notes', 'readwrite', (s) => s.put({
+  name, content, base: base || '', dirty: !!isDirty, updatedAt: Date.now(),
+}));
+const cacheNotesAll = () => cacheRun('notes', 'readonly', (s) => s.getAll()).then((x) => x || []);
+const cacheListSet = (list) => cacheRun('meta', 'readwrite', (s) => s.put({ key: 'note-list', value: list }));
+const cacheListGet = () => cacheRun('meta', 'readonly', (s) => s.get('note-list')).then((x) => x?.value || []);
+const cacheFoldersSet = (list) => cacheRun('meta', 'readwrite', (s) => s.put({ key: 'folder-list', value: list }));
+const cacheFoldersGet = () => cacheRun('meta', 'readonly', (s) => s.get('folder-list')).then((x) => x?.value || []);
+async function cacheServerContent(name, content) {
+  const old = await cacheNoteGet(name);
+  if (old?.dirty && old.content !== content) return;
+  return cacheNotePut(name, content, icerikHash(content), false);
+}
+async function cacheSaved(name, hash) {
+  const old = await cacheNoteGet(name);
+  if (old && icerikHash(old.content) === hash) await cacheNotePut(name, old.content, hash, false);
+}
+async function applyServerList(serverNotes, serverFolders) {
+  const drafts = await cacheNotesAll();
+  const pendingNames = drafts.filter((note) => note.dirty).map((note) => note.name);
+  notes = [...new Set([...(Array.isArray(serverNotes) ? serverNotes : []), ...pendingNames])]
+    .sort((a, b) => a.localeCompare(b, 'tr'));
+  cacheListSet(notes);
+  if (Array.isArray(serverFolders)) {
+    folders = [...new Set(serverFolders)].sort((a, b) => a.localeCompare(b, 'tr'));
+    cacheFoldersSet(folders);
+  }
+  if (current && !notes.includes(current)) closeNote();
+  renderList();
+  if (current) blTimerKur();
+  loadOverview();
+}
 
 // hizli icerik ozeti (djb2) - sunucudaki hash ile birebir ayni olmali
 function icerikHash(s) {
@@ -423,13 +903,37 @@ function icerikHash(s) {
 }
 
 // ws CONNECTING/CLOSED iken send exception firlatmasin
-function send(obj) {
+function sendRaw(obj) {
   if (ws && ws.readyState === 1) { ws.send(JSON.stringify(obj)); return true; }
   return false;
 }
+function send(obj) { return wsAuthed ? sendRaw(obj) : false; }
 
+// Electron ilk acilista config kimligini yalniz fragmentte verir. Fragment HTTP'ye
+// gitmez; burada tek sefer okuyup mevcut history kaydindan hemen temizlenir.
+const bootParams = new URLSearchParams(location.hash.slice(1));
+const bootAuth = bootParams.get('auth') || '';
+const bootView = bootParams.get('view') || '';
+const bootNote = bootParams.get('note') || '';
+if (bootAuth) {
+  localStorage.setItem('key', bootAuth);
+  history.replaceState(null, '', location.pathname + location.search);
+}
 // --- parola: once parolasiz/hatirlanan anahtarla dene, sunucu reddederse sor ---
-let key = localStorage.getItem('key') || '';
+let key = bootAuth || localStorage.getItem('key') || '';
+function apiFetch(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (key) headers.set('X-Api-Key', key);
+  return fetch(path, { ...options, headers });
+}
+async function apiJson(path, options = {}) {
+  const response = await apiFetch(path, options);
+  if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+  return response.json();
+}
+function jsonOptions(method, body) {
+  return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) };
+}
 $('loginInput').addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || !$('loginInput').value) return;
   key = $('loginInput').value;
@@ -439,62 +943,136 @@ $('loginInput').addEventListener('keydown', (e) => {
 });
 
 function connect() {
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/?key=' + encodeURIComponent(key));
+  clearTimeout(reconnectTimer);
+  wsAuthed = false;
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/');
   ws.onopen = () => {
     $('statusText').textContent = 'Doğrulanıyor...';
-    if (current) {
-      // kopuklukta yazdiysak GUVENLI gonder: sunucu da bu arada degistiyse
-      // kimse sessizce ezilmez, cakisma kopyasi acilir (CRDT'siz durust cozum)
-      if (dirty) { send({ type: 'edit-safe', name: current, content: $('editor').value, base: baseHash }); dirty = false; }
-      else { loaded = false; send({ type: 'open', name: current }); }
-    }
+    sendRaw({ type: 'auth', key });
   };
   ws.onclose = (e) => {
+    wsAuthed = false;
     $('dot').classList.remove('on');
+    $('overviewSync').className = 'statusPill warn';
+    $('overviewSync').textContent = 'çevrimdışı';
     if (e.code === 4001) {
       // parola gerekli / yanlis -> sor
       const hadKey = !!key;
       localStorage.removeItem('key'); key = '';
       $('login').style.display = 'flex'; $('loginInput').value = '';
-      $('loginErr').textContent = hadKey ? 'Parola yanlış, tekrar dene' : '';
+      $('loginErr').textContent = hadKey ? 'Parola/cihaz anahtarı geçersiz veya iptal edilmiş' : '';
       $('loginInput').focus();
       $('statusText').textContent = 'Parola bekleniyor';
       return;
     }
     $('statusText').textContent = 'Koptu, tekrar deniyor...';
-    setTimeout(connect, 1500);
+    reconnectTimer = setTimeout(connect, 1500);
   };
   ws.onmessage = (e) => {
-    // ilk mesaj = parola dogru, gercekten iceridyiz
-    $('dot').classList.add('on');
-    $('statusText').textContent = 'Bağlı — anlık senkron açık';
-    const m = JSON.parse(e.data);
+    let m;
+    try { m = JSON.parse(e.data); } catch { return; }
+    if (m.type === 'session') {
+      wsAuthed = true;
+      sessionRole = m.role || 'device';
+      $('dot').classList.add('on');
+      $('statusText').textContent = 'Bağlı · anlık senkron açık';
+      $('overviewSync').className = 'statusPill';
+      $('overviewSync').textContent = sessionRole === 'master' ? 'host bağlı' : 'cihaz bağlı';
+      updateRoleUi();
+      apiFetch('/api/session').then((response) => {
+        if (!response.ok) return;
+        // Bundan sonraki HTTP ve WebSocket istekleri HttpOnly oturumu kullanir;
+        // uzun omurlu anahtari sayfa JavaScript'inde tutma.
+        localStorage.removeItem('key');
+        key = '';
+      }).catch(() => {});
+      flushDirtyDrafts();
+      if (current && !dirty) send({ type: 'open', name: current });
+      loadOverview();
+      return;
+    }
     if (m.type === 'list') {
-      if (!pairYoklandi) { pairYoklandi = true; pairKontrol(); } // acilista bekleyen talep var mi
-      notes = m.notes;
-      // acik not baska cihazda silindiyse hayalet olarak kalmasin
-      if (current && !notes.includes(current)) closeNote();
-      renderList();
-      acilisEvreni(); // uygulama açılışında ilk ekran = evren (oturumda bir kez)
-      if (current) blTimerKur(); // yeni/silinen not backlinkleri degistirmis olabilir
+      if (sessionRole === 'master' && !pairYoklandi) { pairYoklandi = true; pairKontrol(); }
+      applyServerList(m.notes, m.folders);
+    }
+    if (m.type === 'folders') {
+      folders = Array.isArray(m.folders) ? m.folders : [];
+      cacheFoldersSet(folders); renderList();
+    }
+    if (m.type === 'folder-renamed') {
+      const moved = Array.isArray(m.moved) ? m.moved : [];
+      for (const item of moved) {
+        cacheNoteGet(item.from).then((cached) => {
+          if (cached) cacheNotePut(item.to, cached.content, cached.base, cached.dirty);
+          cacheNoteDelete(item.from);
+        });
+        if (current === item.from) {
+          current = item.to;
+          $('titleText').textContent = item.to;
+        }
+      }
+      folders = Array.isArray(m.folders) ? m.folders : folders;
+      if (selectedFolder === m.from || selectedFolder.startsWith((m.from || '') + '/')) selectedFolder = m.to + selectedFolder.slice(m.from.length);
+      applyServerList(m.notes, folders);
     }
     // baska bir notta yapilan degisiklik bu nota [[link]] eklemis olabilir
-    if (m.type === 'content' && m.name !== current && current) blTimerKur();
-    if (m.type === 'created') openNote(m.name);
+    if (m.type === 'content' && m.name !== current) {
+      cacheServerContent(m.name, m.content || '');
+      if (current) blTimerKur();
+    }
+    if (m.type === 'created') openNote(m.name, true);
+    if (m.type === 'renamed') {
+      cacheNoteDelete(m.from);
+      if (current === m.from) {
+        current = m.to; dirty = false; awaitingSafe = false;
+        $('titleText').textContent = m.to;
+      }
+      loadOverview();
+    }
+    if (m.type === 'overview') loadOverview();
+    if (m.type === 'runtime') {
+      renderRuntimeTask(m.task || {});
+      if (!m.task?.running && currentView === 'runtime') setTimeout(loadRuntime, 350);
+    }
+    if (m.type === 'vault-reset' && currentView === 'vault') {
+      lockVault();
+      openVault();
+    }
     // yeni cihaz bağlanmak istiyor / onay durumu değişti -> onay kutusunu tazele
-    if (m.type === 'pair') pairKontrol();
+    if (m.type === 'pair' && sessionRole === 'master') pairKontrol();
     // motor belge islemeyi bitirdi (basari da hata da tum cihazlara duyurulur)
-    if (m.type === 'belge')
+    if (m.type === 'belge') {
       $('statusText').textContent = m.hata
-        ? '📎 belge olmadı: ' + m.hata
-        : '📎 not hazır: "' + m.ad + '" (' + m.tur + ')';
+        ? 'Belge işlenemedi: ' + m.hata
+        : 'Not hazır: "' + m.ad + '" (' + m.tur + ')';
+      $('docProgress').textContent = $('statusText').textContent;
+      loadOverview();
+    }
     if (m.type === 'conflict') {
-      // offline degisikligimiz kopya nota alindi, sunucudaki hali korundu
-      $('statusText').textContent = '⚠ Çakışma: senin sürümün "' + m.copy + '" notuna kaydedildi';
+      if (m.name === current) { dirty = false; awaitingSafe = false; }
+      cacheNoteDelete(m.name);
+      $('statusText').textContent = 'Çakışma korundu: yerel sürüm "' + m.copy + '" notuna alındı';
+    }
+    if (m.type === 'saved') {
+      cacheSaved(m.name, m.hash);
+      if (m.name === current && icerikHash($('editor').value) === m.hash) {
+        baseHash = m.hash;
+        dirty = false;
+        awaitingSafe = false;
+        cacheNotePut(current, $('editor').value, baseHash, false);
+        $('statusText').textContent = 'Bağlı · kaydedildi';
+      }
     }
     if (m.type === 'content' && m.name === current) {
-      baseHash = icerikHash(m.content);
       const ed = $('editor');
+      if (dirty && ed.value !== m.content) {
+        if (!awaitingSafe) {
+          awaitingSafe = send({ type: 'edit-safe', name: current, content: ed.value, base: baseHash });
+          $('statusText').textContent = 'Eşzamanlı değişiklik bulundu · sürümler korunuyor';
+        }
+        return;
+      }
+      baseHash = icerikHash(m.content);
       if (ed.value !== m.content) {
         // imleci koru
         const pos = ed.selectionStart;
@@ -507,68 +1085,241 @@ function connect() {
         if (previewOn) showPreview(); else ed.focus();
         loadBacklinks();
       }
+      cacheServerContent(current, m.content);
     }
   };
 }
+async function flushDirtyDrafts() {
+  const drafts = await cacheNotesAll();
+  drafts.filter((d) => d.dirty).forEach((d) => {
+    const ok = send({ type: 'edit-safe', name: d.name, content: d.content, base: d.base });
+    if (ok && d.name === current) awaitingSafe = true;
+  });
+}
+let folders = [];
+let selectedFolder = '';
+cacheListGet().then((cached) => {
+  if (!notes.length && cached.length) { notes = cached; renderList(); }
+});
+cacheFoldersGet().then((cached) => { if (cached.length) { folders = cached; renderList(); } });
 connect();
 
 // AI hafiza notlari kenar cubugunda gizli (AI konulara bolerse hepsi bu onekle)
 const HIDDEN_PREFIX = 'AI-Hafiza';
-const isHidden = (n) => n.startsWith(HIDDEN_PREFIX);
+const noteParentClient = (name) => name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : '';
+const noteBaseClient = (name) => name.includes('/') ? name.slice(name.lastIndexOf('/') + 1) : name;
+const isHidden = (name) => noteBaseClient(name).startsWith(HIDDEN_PREFIX);
 
-function renderList() {
-  // arama aktifken senkron 'list' mesaji sonuclari silmesin
-  if ($('searchBox').value.trim()) return doSearch();
-  const list = $('noteList');
-  list.innerHTML = '';
-  for (const n of notes) {
-    if (isHidden(n)) continue;
-    const div = document.createElement('div');
-    div.className = 'note-item' + (n === current ? ' active' : '');
-    const span = document.createElement('span');
-    span.textContent = n;
-    const del = document.createElement('button');
-    del.className = 'del'; del.textContent = '✕'; del.title = 'Sil';
-    // confirm() yerine iki tikli silme (Electron'da native dialog focus bozuyor)
-    del.onclick = (ev) => {
-      ev.stopPropagation();
-      if (!del.classList.contains('armed')) {
-        del.classList.add('armed'); del.textContent = 'emin?';
-        setTimeout(() => { del.classList.remove('armed'); del.textContent = '✕'; }, 2500);
-        return;
-      }
-      send({ type: 'delete', name: n });
-      if (current === n) closeNote();
-    };
-    div.append(span, del);
-    div.onclick = () => openNote(n);
-    list.appendChild(div);
+// --- gerçek klasör ağacı: note kimliği "Klasör/Alt Klasör/Not" biçiminde ---
+const folderOpen = {};
+function folderTree() {
+  const root = { path: '', name: '', children: new Map(), notes: [] };
+  const ensure = (folder) => {
+    let node = root, currentPath = '';
+    for (const segment of folder.split('/').filter(Boolean)) {
+      currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+      if (!node.children.has(segment)) node.children.set(segment, { path: currentPath, name: segment, children: new Map(), notes: [] });
+      node = node.children.get(segment);
+    }
+    return node;
+  };
+  const derived = new Set(folders);
+  for (const note of notes) {
+    const parent = noteParentClient(note);
+    if (parent) {
+      let currentPath = '';
+      for (const segment of parent.split('/')) { currentPath = currentPath ? `${currentPath}/${segment}` : segment; derived.add(currentPath); }
+    }
   }
+  for (const folder of derived) ensure(folder);
+  for (const note of notes) if (!isHidden(note)) ensure(noteParentClient(note)).notes.push(note);
+  return root;
+}
+function setSelectedFolder(folder) {
+  selectedFolder = folder || '';
+  $('selectedFolderLabel').textContent = selectedFolder || 'Tüm notlar';
+  $('newBtn').textContent = selectedFolder ? `+ ${noteBaseClient(selectedFolder)} içinde not` : '+ Yeni not';
+}
+function renderFolderNode(node, depth, list) {
+  const containsCurrent = current === node.path || current?.startsWith(node.path + '/');
+  const open = folderOpen[node.path] ?? containsCurrent;
+  const count = notes.filter((note) => note.startsWith(node.path + '/') && !isHidden(note)).length;
+  const row = document.createElement('div');
+  row.className = 'folderRow' + (selectedFolder === node.path ? ' selected' : '');
+  row.style.paddingLeft = `${10 + depth * 14}px`;
+  const chev = document.createElement('span'); chev.className = 'chev'; chev.textContent = open ? '▾' : '▸';
+  const icon = document.createElement('span'); icon.textContent = '▣'; icon.style.color = 'var(--accent)';
+  const name = document.createElement('span'); name.className = 'fname'; name.textContent = node.name;
+  const total = document.createElement('span'); total.className = 'fcount'; total.textContent = count;
+  const actions = document.createElement('span'); actions.className = 'folderActions';
+  const add = document.createElement('button'); add.textContent = '+'; add.title = 'Bu klasörde yeni not';
+  add.onclick = (event) => { event.stopPropagation(); setSelectedFolder(node.path); folderOpen[node.path] = true; openNameEntry(); renderList(); };
+  const edit = document.createElement('button'); edit.textContent = '✎'; edit.title = 'Klasörü yeniden adlandır';
+  edit.onclick = (event) => { event.stopPropagation(); openFolderEntry('rename', node.path, node.name); };
+  const remove = document.createElement('button'); remove.textContent = '×'; remove.title = 'Boş klasörü sil';
+  remove.onclick = async (event) => {
+    event.stopPropagation();
+    if (remove.dataset.armed !== '1') {
+      remove.dataset.armed = '1'; remove.textContent = '?';
+      setTimeout(() => { remove.dataset.armed = ''; remove.textContent = '×'; }, 2200);
+      return;
+    }
+    try {
+      const response = await apiFetch('/api/folders', jsonOptions('DELETE', { path: node.path }));
+      if (!response.ok) throw new Error(await response.text());
+      if (selectedFolder === node.path) setSelectedFolder('');
+    } catch (error) { $('statusText').textContent = String(error.message || error); }
+  };
+  actions.append(add, edit, remove);
+  row.append(chev, icon, name, total, actions);
+  row.onclick = () => { setSelectedFolder(node.path); folderOpen[node.path] = !open; renderList(); };
+  row.ondragover = (event) => { event.preventDefault(); row.classList.add('selected'); };
+  row.ondragleave = () => row.classList.toggle('selected', selectedFolder === node.path);
+  row.ondrop = async (event) => {
+    event.preventDefault();
+    const source = event.dataTransfer.getData('text/notlar-note');
+    if (!source) return;
+    const target = `${node.path}/${noteBaseClient(source)}`;
+    if (target === source) return;
+    try {
+      const response = await apiFetch('/api/note/' + encodeURIComponent(source), jsonOptions('PATCH', { name: target }));
+      if (!response.ok) throw new Error(await response.text());
+      setSelectedFolder(node.path); folderOpen[node.path] = true;
+    } catch (error) { $('statusText').textContent = String(error.message || error); }
+  };
+  list.appendChild(row);
+  if (!open) return;
+  for (const child of [...node.children.values()].sort((a, b) => a.name.localeCompare(b.name, 'tr'))) renderFolderNode(child, depth + 1, list);
+  for (const note of node.notes.sort((a, b) => a.localeCompare(b, 'tr'))) list.appendChild(noteItem(note, noteBaseClient(note), depth + 1));
+}
+function renderList() {
+  if ($('searchBox').value.trim()) return doSearch();
+  const list = $('noteList'); list.innerHTML = '';
+  const tree = folderTree();
+  const secHead = (text) => { const heading = document.createElement('div'); heading.className = 'secHead'; heading.textContent = text; return heading; };
+  if (tree.children.size) {
+    list.appendChild(secHead('KLASÖRLER'));
+    for (const node of [...tree.children.values()].sort((a, b) => a.name.localeCompare(b.name, 'tr'))) renderFolderNode(node, 0, list);
+  }
+  if (tree.notes.length) {
+    list.appendChild(secHead('ANA DİZİN'));
+    for (const note of tree.notes.sort((a, b) => a.localeCompare(b, 'tr'))) list.appendChild(noteItem(note, noteBaseClient(note), 0));
+  }
+  if (!tree.children.size && !tree.notes.length) list.appendChild(secHead('HENÜZ NOT YOK'));
+}
+function noteItem(n, label, depth = 0) {
+  const div = document.createElement('div');
+  div.className = 'note-item' + (n === current ? ' active' : '');
+  div.style.paddingLeft = `${12 + depth * 14}px`;
+  div.draggable = true;
+  div.ondragstart = (event) => event.dataTransfer.setData('text/notlar-note', n);
+  const span = document.createElement('span');
+  span.textContent = label || n;
+  span.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0';
+  const del = document.createElement('button');
+  del.className = 'del'; del.textContent = '✕'; del.title = 'Sil';
+  // confirm() yerine iki tikli silme (Electron'da native dialog focus bozuyor)
+  del.onclick = (ev) => {
+    ev.stopPropagation();
+    if (!del.classList.contains('armed')) {
+      del.classList.add('armed'); del.textContent = 'emin?';
+      setTimeout(() => { del.classList.remove('armed'); del.textContent = '✕'; }, 2500);
+      return;
+    }
+    moveToTrash(n).catch((e) => { $('statusText').textContent = e.message; });
+  };
+  div.append(span, del);
+  div.onclick = () => { setSelectedFolder(noteParentClient(n)); openNote(n); };
+  return div;
 }
 
-function openNote(name) {
+let folderAction = { type: 'create', source: null };
+function openFolderEntry(type = 'create', source = null, initial = '') {
+  folderAction = { type, source };
+  $('folderCreateRow').style.display = 'flex';
+  $('folderInput').placeholder = type === 'rename' ? 'Yeni klasör adı' : 'Klasör adı';
+  $('folderInput').value = initial;
+  $('folderInput').focus(); $('folderInput').select();
+}
+async function submitFolderEntry() {
+  const segment = cleanClientName($('folderInput').value);
+  if (!segment) return;
+  const parent = folderAction.type === 'rename' ? noteParentClient(folderAction.source) : selectedFolder;
+  const target = parent ? `${parent}/${segment}` : segment;
+  const options = folderAction.type === 'rename'
+    ? jsonOptions('PATCH', { path: folderAction.source, newPath: target })
+    : jsonOptions('POST', { path: target });
+  const response = await apiFetch('/api/folders', options);
+  if (!response.ok) throw new Error(await response.text());
+  setSelectedFolder(target); folderOpen[target] = true;
+  $('folderCreateRow').style.display = 'none'; $('folderInput').value = '';
+  folderAction = { type: 'create', source: null };
+}
+$('newFolderBtn').onclick = () => openFolderEntry();
+$('rootFolderBtn').onclick = () => { setSelectedFolder(''); renderList(); };
+$('rootFolderBtn').ondragover = (event) => event.preventDefault();
+$('rootFolderBtn').ondrop = async (event) => {
+  event.preventDefault();
+  const source = event.dataTransfer.getData('text/notlar-note');
+  if (!source || !noteParentClient(source)) return;
+  try {
+    const response = await apiFetch('/api/note/' + encodeURIComponent(source), jsonOptions('PATCH', { name: noteBaseClient(source) }));
+    if (!response.ok) throw new Error(await response.text());
+    setSelectedFolder('');
+  } catch (error) { $('statusText').textContent = String(error.message || error); }
+};
+$('folderCreateOk').onclick = () => submitFolderEntry().catch((error) => { $('statusText').textContent = String(error.message || error); });
+$('folderCreateCancel').onclick = () => { $('folderCreateRow').style.display = 'none'; $('folderInput').value = ''; };
+$('folderInput').onkeydown = (event) => {
+  if (event.key === 'Escape') $('folderCreateCancel').click();
+  if (event.key === 'Enter') $('folderCreateOk').click();
+};
+$('obsidianOpenBtn').onclick = () => { showView('runtime'); setTimeout(() => $('obsidianVaults').scrollIntoView({ behavior: 'smooth' }), 100); };
+
+async function openNote(name, edit = false) {
+  showView('notes');
+  setSelectedFolder(noteParentClient(name));
+  for (let folder = noteParentClient(name); folder; folder = noteParentClient(folder)) folderOpen[folder] = true;
   current = name;
   loaded = false; dirty = false;
   $('titleText').textContent = name;
-  $('previewBtn').style.display = '';
+  if (edit) previewOn = false;
+  $('previewBtn').style.display = 'inline-flex'; updatePvBtn(); document.body.classList.add('noteOpen');
   $('empty').style.display = 'none';
   $('backlinks').innerHTML = '';
   const ed = $('editor');
   ed.style.display = previewOn ? 'none' : '';
-  $('preview').style.display = previewOn ? '' : 'none';
+  $('preview').style.display = previewOn ? 'block' : 'none';
   if (previewOn) $('preview').innerHTML = '';
-  // eski notun icerigi yeni nota sizmasin: icerik gelene kadar bos + kilitli
   ed.value = ''; ed.disabled = true;
-  send({ type: 'open', name });
   renderList();
   $('sidebar').classList.remove('open'); // mobil cekmece not acilinca kapansin
+  updatePinButton();
+
+  const cached = await cacheNoteGet(name);
+  if (current !== name) return;
+  if (cached) {
+    ed.value = cached.content || '';
+    baseHash = cached.base || icerikHash(ed.value);
+    dirty = !!cached.dirty;
+    loaded = true;
+    ed.disabled = false;
+    if (previewOn) showPreview();
+  }
+  if (wsAuthed) {
+    if (dirty) awaitingSafe = send({ type: 'edit-safe', name, content: ed.value, base: baseHash });
+    else send({ type: 'open', name });
+  } else if (!cached) {
+    $('statusText').textContent = 'Çevrimdışı · bu not henüz cihazda yok';
+  }
+  if (!previewOn && loaded) ed.focus();
 }
 
 function closeNote() {
   current = null;
-  loaded = false; dirty = false;
+  loaded = false; dirty = false; awaitingSafe = false;
   $('titleText').textContent = '';
-  $('previewBtn').style.display = 'none';
+  $('previewBtn').style.display = 'none'; document.body.classList.remove('noteOpen');
   $('backlinks').innerHTML = '';
   $('editor').style.display = 'none';
   $('editor').value = '';
@@ -579,55 +1330,382 @@ function closeNote() {
 
 $('editor').addEventListener('input', () => {
   if (!current || !loaded) return;
-  if (send({ type: 'edit', name: current, content: $('editor').value }))
-    baseHash = icerikHash($('editor').value); // canli senkron: mutabakat guncel
+  dirty = true;
+  const content = $('editor').value;
+  cacheNotePut(current, content, baseHash, true);
+  if (send({ type: 'edit', name: current, content }))
+    $('statusText').textContent = 'Bağlı · kaydediliyor';
   else
-    dirty = true; // baglanti yok: reconnect olunca edit-safe ile gonderilecek
+    $('statusText').textContent = 'Çevrimdışı · taslak bu cihazda korundu';
 });
 
-// --- mobil kenar cubugu (☰) + PWA service worker ---
+// --- gorunum yonlendiricisi: her ana yetenek kendi tam sayfasinda ---
+const VIEW_BUTTONS = {
+  overview: 'railLogo', notes: 'notesBtn', map: 'mapBtn', vault: 'vaultBtn',
+  tools: 'toolsBtn', ai: 'aiBtn', document: 'docBtn', runtime: 'runtimeBtn',
+  sync: 'syncBtn', settings: 'setBtn',
+};
+let currentView = 'overview';
+let pinnedNames = new Set();
+let overviewLoading = null;
+
+function updateRoleUi() {
+  const host = sessionRole === 'master';
+  $('syncRole').textContent = host ? 'ana cihaz' : 'eşleşmiş cihaz';
+  $('syncRole').className = 'statusPill ' + (host ? '' : 'info');
+  $('kodBtn').disabled = !host;
+  $('kodBtn').title = host ? '' : 'Yalnız ana cihaz yeni eşleştirme başlatabilir';
+  $('cihazBlok').style.opacity = host ? '1' : '.55';
+  if (!host) $('cihazListe').textContent = 'Cihaz listesi yalnız ana cihazda yönetilir.';
+  $('settingSave').disabled = !host;
+  $('graphifyRebuild').disabled = !host;
+  $('graphifyRebuild').title = host ? 'Graphify görünümünü yeniden kur' : 'Yalnız ana cihaz yeniden kurabilir';
+  document.querySelectorAll('#appSettings input, #appSettings select').forEach((control) => { control.disabled = !host; });
+}
+function renderHiddenNotes() {
+  const hidden = notes.filter(isHidden);
+  $('hidBos').style.display = hidden.length ? 'none' : '';
+  const box = $('hidList'); box.innerHTML = '';
+  hidden.forEach((name) => {
+    const row = document.createElement('button');
+    row.className = 'hidNote'; row.type = 'button'; row.textContent = name;
+    row.onclick = () => openNote(name);
+    box.appendChild(row);
+  });
+}
+function relativeTime(value) {
+  if (!value) return 'tarih yok';
+  const seconds = Math.round((new Date(value).getTime() - Date.now()) / 1000);
+  const abs = Math.abs(seconds);
+  const unit = abs < 60 ? 'second' : abs < 3600 ? 'minute' : abs < 86400 ? 'hour' : 'day';
+  const amount = unit === 'second' ? seconds : unit === 'minute' ? Math.round(seconds / 60) : unit === 'hour' ? Math.round(seconds / 3600) : Math.round(seconds / 86400);
+  return new Intl.RelativeTimeFormat('tr', { numeric: 'auto' }).format(amount, unit);
+}
+function renderOverviewRows(target, items, emptyText) {
+  const box = $(target); box.innerHTML = '';
+  if (!items.length) {
+    const empty = document.createElement('div'); empty.className = 'overviewSnippet';
+    empty.style.padding = '14px 4px'; empty.textContent = emptyText; box.appendChild(empty); return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement('div'); row.className = 'overviewRow'; row.tabIndex = 0;
+    const info = document.createElement('div');
+    const name = document.createElement('div'); name.className = 'overviewName'; name.textContent = item.name;
+    const snippet = document.createElement('div'); snippet.className = 'overviewSnippet'; snippet.textContent = item.snippet || 'Boş not';
+    const meta = document.createElement('div'); meta.className = 'overviewMeta'; meta.textContent = relativeTime(item.modifiedAt);
+    info.append(name, snippet); row.append(info, meta);
+    row.onclick = () => openNote(item.name);
+    row.onkeydown = (e) => { if (e.key === 'Enter') row.click(); };
+    box.appendChild(row);
+  });
+}
+function renderMemoryResume(memory) {
+  const checkpoint = memory?.checkpoints?.[0];
+  const session = checkpoint && memory.sessions?.find((item) => item.id === checkpoint.sessionId);
+  if (!checkpoint) {
+    $('resumeType').textContent = 'AI HAFIZASI';
+    $('resumeTitle').textContent = 'Henüz checkpoint yok';
+    $('resumeSummary').textContent = 'İlk AI oturumu tamamlandığında kaldığın yer burada görünecek.';
+    $('resumeMeta').textContent = `${memory?.stats?.memories || 0} hafıza · ${memory?.stats?.sessions || 0} oturum`;
+    return;
+  }
+  $('resumeType').textContent = `${session?.agent || checkpoint.agent || 'AI'} CHECKPOINT`;
+  $('resumeTitle').textContent = checkpoint.title || session?.title || 'Son AI oturumu';
+  $('resumeSummary').textContent = checkpoint.summary || 'Oturum durumu kaydedildi.';
+  const next = checkpoint.nextStep ? ` · Sıradaki: ${checkpoint.nextStep}` : '';
+  $('resumeMeta').textContent = `${relativeTime(checkpoint.createdAt)} · ${checkpoint.completed?.length || 0} tamamlanan · ${checkpoint.openTasks?.length || 0} açık${next}`;
+}
+async function loadOverview() {
+  if (!wsAuthed) {
+    const cached = notes.slice(0, 8).map((name) => ({ name, snippet: 'Çevrimdışı önbellek', modifiedAt: null }));
+    renderOverviewRows('recentNotes', cached, 'Henüz önbelleğe alınmış not yok.');
+    return;
+  }
+  if (overviewLoading) return overviewLoading;
+  overviewLoading = Promise.all([
+    apiJson('/api/overview'),
+    apiJson('/api/memory/overview').catch(() => null),
+  ]).then(([data, memory]) => {
+    Object.entries(data.stats || {}).forEach(([name, value]) => {
+      const el = document.querySelector(`[data-stat="${name}"]`); if (el) el.textContent = value ?? '—';
+    });
+    $('trashCount').textContent = data.stats?.trash ? `(${data.stats.trash})` : '';
+    pinnedNames = new Set((data.pinned || []).map((n) => n.name));
+    renderOverviewRows('recentNotes', data.notes || [], 'Henüz not yok.');
+    renderOverviewRows('pinnedNotes', data.pinned || [], 'Sabitlenmiş not yok.');
+    const health = $('healthList'); health.innerHTML = '';
+    const rows = [
+      ['Canlı senkron', `${data.sync?.connected || 1} bağlı`, ''],
+      ['Git yedeği', data.sync?.backupEnabled ? 'açık' : 'kapalı', data.sync?.backupEnabled ? '' : 'info'],
+      ['Kırık bağlantılar', String(data.stats?.brokenLinks || 0), data.stats?.brokenLinks ? 'warn' : ''],
+    ];
+    rows.forEach(([label, value, cls]) => {
+      const row = document.createElement('div'); row.className = 'healthRow';
+      const state = document.createElement('span'); state.className = `statusPill ${cls}`; state.textContent = value;
+      const title = document.createElement('span'); title.textContent = label; row.append(title, state); health.appendChild(row);
+    });
+    renderMemoryResume(memory);
+    updatePinButton();
+  }).catch(() => {}).finally(() => { overviewLoading = null; });
+  return overviewLoading;
+}
+$('brainResumeBtn').onclick = () => showView('map');
+async function loadAiStatus() {
+  try {
+    const state = await apiJson('/api/ai/status');
+    const labels = [$('aiState'), $('ollamaState')];
+    labels.forEach((el) => { el.textContent = state.online ? 'çalışıyor' : 'ulaşılamıyor'; el.className = `statusPill ${state.online ? '' : 'warn'}`; });
+    const models = state.models || [];
+    const selected = $('aModel').value || $('settingModel').value;
+    $('aModel').innerHTML = '';
+    (models.length ? models : [selected || 'qwen3:8b']).filter(Boolean).forEach((model) => {
+      const option = document.createElement('option'); option.value = model; option.textContent = model; $('aModel').appendChild(option);
+    });
+    if (selected && [...$('aModel').options].some((o) => o.value === selected)) $('aModel').value = selected;
+  } catch {
+    [$('aiState'), $('ollamaState')].forEach((el) => { el.textContent = 'ulaşılamıyor'; el.className = 'statusPill warn'; });
+  }
+}
+async function loadMotorStatus() {
+  try {
+    const state = await apiJson('/api/motor');
+    const missing = Array.isArray(state.eksik) ? state.eksik.length : 0;
+    const text = missing ? `${missing} bileşen kurulabilir` : 'hazır';
+    [$('motorState'), $('docEngineState')].forEach((el) => {
+      el.textContent = text; el.className = `statusPill ${missing ? 'warn' : ''}`;
+      el.title = missing ? 'Kurulum Merkezi\'ni aç' : '';
+    });
+    $('docPickBtn').disabled = false;
+    $('docDrop').classList.remove('disabled');
+  } catch {
+    [$('motorState'), $('docEngineState')].forEach((el) => { el.textContent = 'ulaşılamıyor'; el.className = 'statusPill warn'; });
+  }
+}
+let runtimePoll = null;
+let obsidianLoaded = false;
+function renderRuntimeTask(task = {}) {
+  const visible = task.running || task.startedAt || task.error;
+  $('runtimeTask').style.display = visible ? '' : 'none';
+  $('runtimeStep').textContent = task.error || task.step || 'Hazırlanıyor';
+  $('runtimePercent').textContent = `${Number(task.progress || 0)}%`;
+  $('runtimeProgressBar').style.width = `${Math.max(0, Math.min(100, Number(task.progress || 0)))}%`;
+  $('runtimeLog').textContent = (task.logs || []).join('\n');
+  $('runtimeLog').scrollTop = $('runtimeLog').scrollHeight;
+  $('runtimeCancel').style.display = task.running ? '' : 'none';
+  $('runtimeInstallAll').disabled = !!task.running || sessionRole !== 'master';
+}
+function renderRuntime(state) {
+  const box = $('runtimeList'); box.innerHTML = '';
+  for (const component of state.components || []) {
+    const row = document.createElement('div'); row.className = 'runtimeRow';
+    const mark = document.createElement('span'); mark.className = 'runtimeMark' + (component.ready ? '' : ' missing'); mark.textContent = component.ready ? '✓' : '!';
+    const info = document.createElement('div');
+    const name = document.createElement('div'); name.className = 'runtimeName'; name.textContent = component.name;
+    const detail = document.createElement('div'); detail.className = 'runtimeDetail'; detail.textContent = component.detail;
+    info.append(name, detail);
+    const status = document.createElement('span'); status.className = `statusPill ${component.ready ? '' : 'warn'}`; status.textContent = component.ready ? 'hazır' : 'eksik';
+    const action = document.createElement('button'); action.className = 'miniBtn';
+    action.textContent = component.ready ? 'Hazır' : 'Kur';
+    action.disabled = component.ready || !component.group || state.task?.running || sessionRole !== 'master';
+    if (component.ready || !component.group) action.style.visibility = 'hidden';
+    if (!component.ready && component.group) action.onclick = () => installRuntime(component.group);
+    row.append(mark, info, status, action); box.appendChild(row);
+  }
+  $('runtimeState').textContent = state.allReady ? 'tüm özellikler hazır' : 'kurulum gerekli';
+  $('runtimeState').className = `statusPill ${state.allReady ? '' : 'warn'}`;
+  $('runtimeInstallAll').disabled = state.allReady || state.task?.running || !state.supported || sessionRole !== 'master';
+  renderRuntimeTask(state.task || {});
+}
+async function loadRuntime() {
+  clearTimeout(runtimePoll); runtimePoll = null;
+  try {
+    const state = await apiJson('/api/runtime');
+    renderRuntime(state);
+    if (!obsidianLoaded) loadObsidianVaults();
+    if (state.task?.running) runtimePoll = setTimeout(loadRuntime, 1200);
+  } catch (error) {
+    $('runtimeState').textContent = 'yalnız ana masaüstü'; $('runtimeState').className = 'statusPill warn';
+    $('runtimeList').innerHTML = '';
+    const row = document.createElement('div'); row.className = 'runtimeRow'; row.textContent = String(error.message || error); $('runtimeList').appendChild(row);
+  }
+}
+async function loadObsidianVaults() {
+  const box = $('obsidianVaults');
+  box.innerHTML = '<div class="runtimeDetail">Kasalar taranıyor...</div>';
+  try {
+    const vaults = await apiJson('/api/import/obsidian');
+    obsidianLoaded = true; box.innerHTML = '';
+    for (const vault of vaults) {
+      const row = document.createElement('div'); row.className = 'runtimeRow';
+      const mark = document.createElement('span'); mark.className = 'runtimeMark'; mark.textContent = 'O';
+      const info = document.createElement('div');
+      const name = document.createElement('div'); name.className = 'runtimeName'; name.textContent = vault.name;
+      const detail = document.createElement('div'); detail.className = 'runtimeDetail'; detail.textContent = `${vault.notes} not · ${vault.folders} klasör · ${vault.assets} ek · ${vault.path}`;
+      info.append(name, detail);
+      const status = document.createElement('span'); status.className = 'statusPill info'; status.textContent = 'algılandı';
+      const action = document.createElement('button'); action.className = 'miniBtn'; action.textContent = 'İçe aktar';
+      action.disabled = sessionRole !== 'master';
+      action.onclick = async () => {
+        action.disabled = true; action.textContent = 'Aktarılıyor...'; $('obsidianFeedback').textContent = '';
+        try {
+          const result = await apiJson('/api/import/obsidian', jsonOptions('POST', { path: vault.path }));
+          $('obsidianFeedback').style.color = 'var(--ok)';
+          $('obsidianFeedback').textContent = `${result.imported} not, ${result.folders} klasör ve ${result.assets} ek aktarıldı; ${result.conflicts} çakışma ayrı kopyada korundu.`;
+        } catch (error) {
+          $('obsidianFeedback').style.color = '';
+          $('obsidianFeedback').textContent = String(error.message || error);
+        } finally { action.disabled = false; action.textContent = 'İçe aktar'; }
+      };
+      row.append(mark, info, status, action); box.appendChild(row);
+    }
+    if (!vaults.length) box.innerHTML = '<div class="runtimeDetail">Bu bilgisayarda Obsidian kasası bulunamadı.</div>';
+  } catch (error) {
+    box.innerHTML = '';
+    const message = document.createElement('div'); message.className = 'runtimeDetail'; message.textContent = String(error.message || error); box.appendChild(message);
+  }
+}
+$('obsidianRefresh').onclick = () => { obsidianLoaded = false; loadObsidianVaults(); };
+async function installRuntime(action) {
+  try {
+    const response = await apiFetch('/api/runtime/install', jsonOptions('POST', { action }));
+    if (!response.ok) throw new Error(await response.text());
+    renderRuntimeTask({ running: true, action, step: 'Kurulum başlatılıyor', progress: 1, logs: [] });
+    runtimePoll = setTimeout(loadRuntime, 800);
+  } catch (error) {
+    renderRuntimeTask({ error: String(error.message || error), progress: 0, logs: [] });
+  }
+}
+$('runtimeInstallAll').onclick = () => installRuntime('all');
+$('runtimeRefresh').onclick = loadRuntime;
+$('runtimeCancel').onclick = async () => {
+  const response = await apiFetch('/api/runtime/cancel', { method: 'POST' });
+  if (!response.ok) $('runtimeStep').textContent = await response.text();
+};
+$('docEngineState').onclick = () => { if ($('docEngineState').classList.contains('warn')) showView('runtime'); };
+$('motorState').onclick = () => { if ($('motorState').classList.contains('warn')) showView('runtime'); };
+async function loadSettings() {
+  renderHiddenNotes(); loadAiStatus(); loadMotorStatus(); loadMemorySettingsStatus();
+  if (sessionRole !== 'master') {
+    $('settingsFeedback').textContent = 'Sunucu ayarları yalnız ana cihazdan değiştirilebilir.';
+    return;
+  }
+  try {
+    const data = await apiJson('/api/settings');
+    $('settingMode').value = data.mode;
+    $('settingServer').value = data.server;
+    $('settingPort').value = data.port;
+    $('settingGit').checked = data.gitAutoPush;
+    $('settingOto').checked = data.otoZihin;
+    $('settingModel').value = data.cevapModeli;
+    $('settingsDataDir').textContent = data.dataDir;
+  } catch (e) { $('settingsFeedback').textContent = e.message; }
+}
+async function loadMemorySettingsStatus() {
+  const [memory, integrations] = await Promise.all([
+    apiJson('/api/memory/overview').catch(() => null),
+    sessionRole === 'master' ? apiJson('/api/integrations').catch(() => null) : Promise.resolve(null),
+  ]);
+  $('settingsMemoryCount').textContent = `${memory?.stats?.memories || 0} kayıt`;
+  $('settingsCheckpointCount').textContent = `${memory?.stats?.checkpoints || 0} kayıt`;
+  const providers = integrations?.providers || [];
+  const ready = providers.filter((provider) => provider.installed && provider.hooksConfigured && provider.mcpConfigured).length;
+  $('settingsIntegrationState').textContent = providers.length ? `${ready}/${providers.length} bağlı` : (sessionRole === 'master' ? 'istemci yok' : 'ana cihazda');
+  $('settingsIntegrationState').className = `statusPill ${providers.length && ready === providers.length ? '' : 'warn'}`;
+}
+$('settingsBrainBtn').onclick = () => showView('map');
+async function showView(view) {
+  if (!VIEW_BUTTONS[view]) view = 'overview';
+  if (currentView === 'vault' && view !== 'vault') lockVault();
+  if (currentView === 'map' && view !== 'map') $('mapFrame').src = 'about:blank';
+  currentView = view;
+  document.body.dataset.view = view;
+  Object.entries(VIEW_BUTTONS).forEach(([name, id]) => $(id).classList.toggle('active', name === view));
+  $('sidebar').classList.remove('open');
+  $('mobileMenu').style.display = 'none';
+  document.querySelectorAll('#bottomNav [data-nav]').forEach((b) => {
+    const mapped = b.dataset.nav === 'menu' ? !['notes', 'map', 'vault'].includes(view) : b.dataset.nav === view;
+    b.classList.toggle('act', mapped);
+  });
+  if (view === 'overview') loadOverview();
+  if (view === 'map' && (!$('mapFrame').getAttribute('src') || $('mapFrame').getAttribute('src') === 'about:blank')) {
+    await apiFetch('/api/session').catch(() => {});
+    $('mapFrame').src = 'brain.html?embed=1';
+  }
+  if (view === 'vault') openVault();
+  if (view === 'ai') loadAiStatus();
+  if (view === 'document') loadMotorStatus();
+  if (view === 'runtime') loadRuntime();
+  if (view === 'sync') { if (sessionRole === 'master') cihazlariYukle(); updateRoleUi(); }
+  if (view === 'settings') loadSettings();
+}
+
 $('burger').onclick = () => $('sidebar').classList.toggle('open');
+$('railLogo').onclick = () => showView('overview');
+$('notesBtn').onclick = () => showView('notes');
+$('mapBtn').onclick = () => showView('map');
+$('vaultBtn').onclick = () => showView('vault');
+$('toolsBtn').onclick = () => showView('tools');
+$('aiBtn').onclick = () => showView('ai');
+$('docBtn').onclick = () => showView('document');
+$('runtimeBtn').onclick = () => showView('runtime');
+$('syncBtn').onclick = () => showView('sync');
+$('setBtn').onclick = () => showView('settings');
+$('kapatSet').onclick = () => showView('notes');
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-// --- ayarlar penceresi ---
-// header ile kimlik: parola/token URL'de degil X-Api-Key'de gider (loga sizmasin)
-function authH() { return key ? { 'X-Api-Key': key, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }; }
-
-$('setBtn').onclick = () => {
-  $('settings').style.display = 'flex';
-  cihazlariYukle(); // bagli cihazlari tazele
-  // gizli AI notlarini listele
-  const hid = notes.filter(isHidden);
-  $('hidBos').style.display = hid.length ? 'none' : '';
-  const box = $('hidList'); box.innerHTML = '';
-  for (const n of hid) {
-    const d = document.createElement('div');
-    d.className = 'hidNote'; d.textContent = '🧠 ' + n;
-    d.onclick = () => { $('settings').style.display = 'none'; openNote(n); };
-    box.appendChild(d);
-  }
+function authH() {
+  const headers = { 'Content-Type': 'application/json' };
+  if (key) headers['X-Api-Key'] = key;
+  return headers;
+}
+$('settingSave').onclick = async () => {
+  if (sessionRole !== 'master') return;
+  const password = $('settingPassword').value;
+  const payload = {
+    mode: $('settingMode').value,
+    server: $('settingServer').value.trim(),
+    port: Number($('settingPort').value),
+    gitAutoPush: $('settingGit').checked,
+    otoZihin: $('settingOto').checked,
+    cevapModeli: $('settingModel').value.trim(),
+  };
+  if (password) payload.password = password;
+  $('settingSave').disabled = true;
+  $('settingsFeedback').textContent = 'Kaydediliyor...';
+  try {
+    const result = await apiJson('/api/settings', jsonOptions('POST', payload));
+    if (password) {
+      key = password; localStorage.setItem('key', key); $('settingPassword').value = '';
+      const sessionResponse = await apiFetch('/api/session');
+      if (!sessionResponse.ok) throw new Error(await sessionResponse.text());
+      localStorage.removeItem('key'); key = '';
+    }
+    $('settingsFeedback').textContent = result.restartRequired
+      ? 'Kaydedildi. Mod, adres veya port değişikliği yeniden başlatmada uygulanacak.'
+      : 'Değişiklikler kaydedildi.';
+  } catch (e) { $('settingsFeedback').textContent = e.message; }
+  $('settingSave').disabled = sessionRole !== 'master';
 };
-$('kapatSet').onclick = () => { $('settings').style.display = 'none'; };
-$('settings').onclick = (e) => { if (e.target.id === 'settings') $('settings').style.display = 'none'; };
 
 // --- eşleştirme: tek kullanımlık kod üret (parola İÇERMEZ) ---
 $('kodBtn').onclick = async () => {
   $('kodBtn').textContent = 'Üretiliyor...';
   try {
-    const r = await fetch('/api/pair/new', { method: 'POST', headers: authH() });
+    const r = await apiFetch('/api/pair/new', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    if (!r.ok) throw new Error(await r.text());
     const d = await r.json();
     $('pairKod').textContent = d.kod;
     $('pairKod').style.display = 'block';
     $('pairKodNot').textContent = 'Yeni cihazda bu kodu gir · 3 dakika geçerli · adres: ' + d.adres;
     $('pairKodNot').style.display = 'block';
     $('kodBtn').textContent = 'Yeni kod üret';
-  } catch { $('kodBtn').textContent = 'Olmadı, tekrar dene'; }
+  } catch (e) { $('kodBtn').textContent = String(e.message || 'Olmadı').slice(0, 34); }
 };
 
 // --- bağlı cihazlar: isimle listele + tek tek iptal ---
 async function cihazlariYukle() {
   try {
-    const list = await fetch('/api/devices', { headers: authH() }).then((r) => r.json());
+    const list = await apiJson('/api/devices');
     const box = $('cihazListe');
     if (!list.length) { box.textContent = 'Henüz eşleşmiş cihaz yok.'; return; }
     box.innerHTML = '';
@@ -642,7 +1720,8 @@ async function cihazlariYukle() {
       b.className = 'sBtn gri'; b.textContent = 'İptal'; b.style.cssText = 'padding:4px 10px;font-size:12px';
       b.onclick = async () => {
         b.disabled = true;
-        await fetch('/api/devices/iptal', { method: 'POST', headers: authH(), body: JSON.stringify({ token: c.token }) });
+        const response = await apiFetch('/api/devices/iptal', jsonOptions('POST', { id: c.id }));
+        if (!response.ok) throw new Error(await response.text());
         cihazlariYukle();
       };
       row.appendChild(b); box.appendChild(row);
@@ -654,7 +1733,7 @@ async function cihazlariYukle() {
 let pairAktifKod = null, pairYoklandi = false;
 async function pairKontrol() {
   try {
-    const talepler = await fetch('/api/pair/talepler', { headers: authH() }).then((r) => r.json());
+    const talepler = await apiJson('/api/pair/talepler');
     const bekleyen = talepler.find((t) => !t.hostOnay);
     if (bekleyen) {
       pairAktifKod = bekleyen.kod;
@@ -670,64 +1749,59 @@ async function pairKontrol() {
 $('pairOnay').onclick = async () => {
   if (!pairAktifKod) return;
   $('pairOnay').disabled = true;
-  await fetch('/api/pair/host-onay', { method: 'POST', headers: authH(), body: JSON.stringify({ kod: pairAktifKod }) });
+  await apiFetch('/api/pair/host-onay', jsonOptions('POST', { kod: pairAktifKod }));
   $('pairOnay').disabled = false;
   $('pairModal').style.display = 'none';
   cihazlariYukle();
 };
 $('pairRet').onclick = async () => {
   if (!pairAktifKod) return;
-  await fetch('/api/pair/host-onay', { method: 'POST', headers: authH(), body: JSON.stringify({ kod: pairAktifKod, reddet: true }) });
+  await apiFetch('/api/pair/host-onay', jsonOptions('POST', { kod: pairAktifKod, reddet: true }));
   $('pairModal').style.display = 'none';
 };
 
-// --- ortak: pencere ac/kapa + authed fetch ---
-const apiQ = (extra) => (key ? '?key=' + encodeURIComponent(key) + (extra ? '&' + extra : '') : (extra ? '?' + extra : ''));
-function openModal(id) { $(id).style.display = 'flex'; }
-document.querySelectorAll('[data-close]').forEach((b) => b.onclick = () => { $(b.dataset.close).style.display = 'none'; });
-document.querySelectorAll('.modal').forEach((m) => m.onclick = (e) => { if (e.target === m) m.style.display = 'none'; });
+// --- ortak yardımcılar ---
+document.querySelectorAll('[data-close]').forEach((b) => b.onclick = () => showView('notes'));
+$('mobileMenu').onclick = (e) => { if (e.target === $('mobileMenu')) $('mobileMenu').style.display = 'none'; };
 async function copyEl(id, btn) {
   await navigator.clipboard.writeText($(id).value);
   const t = btn.textContent; btn.textContent = 'Kopyalandı ✓'; setTimeout(() => btn.textContent = t, 1200);
 }
 
 // --- ZIHIN HARITASI ---
-$('mapBtn').onclick = () => {
-  // parola URL'ye YAZILMAZ: harita "hazirim" deyince postMessage'la verilir
-  // (iframe src'de ?key= kalintisi adres gecmisine/loga dusmesin)
-  $('mapFrame').src = 'harita.html';
-  $('mapOverlay').classList.add('open');
-};
 // AÇILIŞ EVRENİ: uygulama ilk açıldığında not listesi yerine EVREN gelir
 // (?landing=1 → evren modu + sade: yalnız konu güneş sistemleri, meta/sistem notları yok).
 // "✕ notlara geç" ile kapatılır. Oturumda bir kez.
 let acilisEvreniGosterildi = false;
 function acilisEvreni() {
-  if (acilisEvreniGosterildi) return;
+  // v2: açılışta galaksi yerine doğrudan not arayüzü gelsin (mockup 1a).
+  // Evreni görmek isteyen 🕸️ / 🌌 düğmesini kullanır.
   acilisEvreniGosterildi = true;
-  $('mapFrame').src = 'harita.html?landing=1';
-  $('mapOverlay').classList.add('open');
 }
 window.addEventListener('message', (ev) => {
-  if (ev.origin !== location.origin || !ev.data || ev.data.type !== 'harita-hazir') return;
   const fr = $('mapFrame');
-  if (fr.contentWindow) fr.contentWindow.postMessage({ type: 'notlar-key', key: key || '' }, location.origin);
+  if (ev.origin !== location.origin || ev.source !== fr.contentWindow || !ev.data) return;
+  if (ev.data.type === 'harita-hazir') {
+    if (fr.contentWindow) fr.contentWindow.postMessage({ type: 'notlar-key', key: key || '' }, location.origin);
+  }
+  if (ev.data.type === 'open-note' && ev.data.name) {
+    showView('notes');
+    openNote(String(ev.data.name));
+  }
+  if (ev.data.type === 'brain-nav' && VIEW_BUTTONS[ev.data.view]) showView(ev.data.view);
 });
-$('mapClose').onclick = () => {
-  $('mapOverlay').classList.remove('open');
-  $('mapFrame').src = 'about:blank'; // simulasyonu durdur, bellek bosalt
-};
+$('mapClose').onclick = () => showView('notes');
 // --- EVREN <-> GRAPHIFY mod geçişi (graphify canlı uygulamaya gömülü) ---
-$('evrenBtn').onclick = () => { $('mapFrame').src = 'harita.html?landing=1'; };
+$('evrenBtn').onclick = () => { $('mapFrame').src = 'brain.html?embed=1'; };
 $('graphifyBtn').onclick = () => {
-  // /graphify statik graph.html; postMessage alamaz, parola varsa key ile geçilir
-  $('mapFrame').src = '/graphify' + (key ? '?key=' + encodeURIComponent(key) : '');
+  // HttpOnly oturum çerezi sayesinde anahtar URL'ye yazılmaz.
+  $('mapFrame').src = '/graphify';
 };
 $('graphifyRebuild').onclick = async () => {
   const b = $('graphifyRebuild');
   b.textContent = '⏳'; b.disabled = true;
   try {
-    const r = await fetch('/api/graphify/build' + (key ? '?key=' + encodeURIComponent(key) : ''), { method: 'POST' });
+    const r = await apiFetch('/api/graphify/build', { method: 'POST' });
     if (!r.ok) throw new Error(await r.text());
     // grafiği yeni kurulan haliyle tazele (graphify görünümündeyse)
     $('graphifyBtn').onclick();
@@ -736,21 +1810,50 @@ $('graphifyRebuild').onclick = async () => {
 };
 
 // --- ŞİFRE KASASI ---
-let vEntries = null, vPass = null, vBlobStr = null;
-$('vaultBtn').onclick = async () => {
-  openModal('vault');
+let vEntries = null, vPass = null, vBlobStr = null, vEtag = null, vLoadReady = false;
+let vEditingIndex = -1;
+let vaultIdleTimer = null;
+async function openVault() {
+  if (vEntries) { touchVault(); return; }
   $('vOpen').style.display = 'none'; $('vLocked').style.display = ''; $('vErr').textContent = '';
-  $('vMaster').value = ''; $('vMaster').focus();
+  $('vErr').style.color = '';
+  $('vResetConfirm').style.display = 'none'; $('vResetText').value = '';
+  vLoadReady = false; $('vUnlock').disabled = true;
+  $('vMaster').value = ''; $('vMasterConfirm').value = ''; $('vMaster').focus();
   try {
-    const r = await fetch('/api/vault' + apiQ());
-    vBlobStr = r.ok ? await r.text() : null;
-  } catch { vBlobStr = null; }
+    const r = await apiFetch('/api/vault');
+    if (r.status === 404) { vBlobStr = null; vEtag = null; }
+    else {
+      if (!r.ok) throw new Error(await r.text());
+      vBlobStr = await r.text(); vEtag = r.headers.get('etag');
+    }
+    vLoadReady = true; $('vUnlock').disabled = false;
+  } catch (error) { vBlobStr = null; vEtag = null; $('vErr').textContent = 'Kasa alınamadı: ' + String(error.message || error).slice(0, 80); }
   $('vNew').style.display = vBlobStr ? 'none' : ''; // kasa yoksa "ilk kez" uyarisi
-};
+  $('vMasterConfirm').style.display = vBlobStr ? 'none' : '';
+  $('vResetWrap').style.display = vBlobStr && sessionRole === 'master' ? '' : 'none';
+}
 async function saveVault() {
   const blob = await VAULT.encrypt(vEntries, vPass);
-  vBlobStr = blob;
-  await fetch('/api/vault' + apiQ(), { method: 'POST', body: blob });
+  const headers = vEtag ? { 'If-Match': vEtag } : { 'If-None-Match': '*' };
+  const response = await apiFetch('/api/vault', { method: 'POST', headers, body: blob });
+  if (!response.ok) {
+    const message = await response.text();
+    if (response.status === 409) throw new Error('Kasa başka cihazda değişti. Kilitleyip yeniden aç.');
+    throw new Error(message || `HTTP ${response.status}`);
+  }
+  vBlobStr = blob; vEtag = response.headers.get('etag'); $('vSaveErr').textContent = '';
+}
+function vaultSaveError(error) {
+  $('vSaveErr').style.color = '';
+  $('vSaveErr').textContent = String(error.message || error).slice(0, 120);
+}
+function resetVaultEntryForm() {
+  vEditingIndex = -1;
+  ['eTitle', 'eUrl', 'eUser', 'ePass'].forEach((id) => $(id).value = '');
+  $('eFormTitle').textContent = 'Kayıt ekle';
+  $('eAdd').textContent = 'Kaydet';
+  $('eCancel').style.display = 'none';
 }
 function renderVault() {
   const q = ($('vSearch').value || '').toLowerCase();
@@ -765,38 +1868,125 @@ function renderVault() {
     info.querySelector('.vu').textContent = [e.username, e.url].filter(Boolean).join(' · ');
     const acts = document.createElement('div'); acts.className = 'row';
     const cp = document.createElement('button'); cp.className = 'miniBtn'; cp.textContent = 'Şifreyi kopyala';
-    cp.onclick = () => { navigator.clipboard.writeText(e.password); cp.textContent = 'Kopyalandı ✓'; setTimeout(() => cp.textContent = 'Şifreyi kopyala', 1200); };
+    cp.onclick = async () => {
+      await navigator.clipboard.writeText(e.password);
+      cp.textContent = 'Kopyalandı ✓';
+      setTimeout(() => cp.textContent = 'Şifreyi kopyala', 1200);
+      setTimeout(async () => {
+        try { if (await navigator.clipboard.readText() === e.password) await navigator.clipboard.writeText(''); } catch {}
+      }, 30000);
+      touchVault();
+    };
     const sh = document.createElement('button'); sh.className = 'miniBtn'; sh.textContent = '👁';
     const pw = document.createElement('div'); pw.className = 'mono'; pw.style.display = 'none'; pw.style.marginTop = '6px'; pw.textContent = e.password;
     sh.onclick = () => { pw.style.display = pw.style.display === 'none' ? '' : 'none'; };
+    const edit = document.createElement('button'); edit.className = 'miniBtn'; edit.textContent = 'Düzenle';
+    edit.onclick = () => {
+      vEditingIndex = i;
+      $('eTitle').value = e.title || '';
+      $('eUrl').value = e.url || '';
+      $('eUser').value = e.username || '';
+      $('ePass').value = e.password || '';
+      $('eFormTitle').textContent = 'Kaydı düzenle';
+      $('eAdd').textContent = 'Güncelle';
+      $('eCancel').style.display = '';
+      $('vEntryForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      $('eTitle').focus();
+      touchVault();
+    };
     const del = document.createElement('button'); del.className = 'miniBtn'; del.textContent = '🗑';
-    del.onclick = async () => { vEntries.splice(i, 1); await saveVault(); renderVault(); };
-    acts.append(sh, cp, del);
+    del.onclick = async () => {
+      const removed = vEntries.splice(i, 1)[0];
+      try { await saveVault(); resetVaultEntryForm(); renderVault(); }
+      catch (error) { vEntries.splice(i, 0, removed); vaultSaveError(error); renderVault(); }
+    };
+    acts.append(sh, cp, edit, del);
     head.append(info, acts); d.append(head, pw); box.appendChild(d);
   });
   if (!box.children.length) box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Kayıt yok. Aşağıdan ekle veya CSV içe aktar.</div>';
 }
 $('vUnlock').onclick = async () => {
+  if (!vLoadReady) return;
   const m = $('vMaster').value; if (!m) return;
+  const creating = !vBlobStr;
+  if (creating && m.length < 12) { $('vErr').textContent = 'Kasa ana parolası en az 12 karakter olmalı.'; return; }
+  if (creating && m !== $('vMasterConfirm').value) { $('vErr').textContent = 'Kasa ana parolaları eşleşmiyor.'; return; }
   $('vErr').textContent = '';
+  $('vUnlock').disabled = true;
+  $('vUnlock').textContent = creating ? 'Kasa oluşturuluyor...' : 'Kasa açılıyor...';
   try {
     if (vBlobStr) { vEntries = await VAULT.decrypt(vBlobStr, m); }   // mevcut kasa
     else { vEntries = []; }                                          // yeni kasa
     vPass = m;
     if (!vBlobStr) await saveVault();                               // yeni kasayi olustur
     $('vLocked').style.display = 'none'; $('vOpen').style.display = '';
-    renderVault(); startPendingPoll();
-  } catch { $('vErr').textContent = 'Ana parola yanlış (ya da kasa bozuk).'; }
+    $('vSaveErr').textContent = ''; $('vSaveErr').style.color = '';
+    $('vault').scrollTop = 0;
+    resetVaultEntryForm(); renderVault(); startPendingPoll(); touchVault();
+  } catch (error) {
+    vEntries = null; vPass = null;
+    $('vErr').textContent = vBlobStr ? 'Kasa ana parolası yanlış ya da kasa bozuk.' : String(error.message || error);
+  } finally {
+    $('vUnlock').textContent = 'Kasayı aç';
+    $('vUnlock').disabled = !vLoadReady;
+  }
 };
 $('vMaster').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('vUnlock').click(); });
-$('vLock').onclick = () => { vEntries = null; vPass = null; stopPendingPoll(); $('vOpen').style.display = 'none'; $('vLocked').style.display = ''; $('vMaster').value = ''; };
+$('vMasterConfirm').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('vUnlock').click(); });
+function lockVault() {
+  vEntries = null; vPass = null;
+  vLoadReady = false;
+  clearTimeout(vaultIdleTimer); vaultIdleTimer = null;
+  stopPendingPoll();
+  resetVaultEntryForm();
+  $('vOpen').style.display = 'none'; $('vLocked').style.display = '';
+  $('vMaster').value = ''; $('vMasterConfirm').value = '';
+  $('vResetConfirm').style.display = 'none'; $('vResetText').value = '';
+  $('vNewPass').value = ''; $('vNewPassConfirm').value = ''; $('vPassMsg').textContent = '';
+}
+function touchVault() {
+  if (!vEntries) return;
+  clearTimeout(vaultIdleTimer);
+  vaultIdleTimer = setTimeout(lockVault, 5 * 60 * 1000);
+}
+$('vLock').onclick = lockVault;
+$('vResetStart').onclick = () => {
+  $('vResetConfirm').style.display = '';
+  $('vResetText').focus();
+};
+$('vResetCancel').onclick = () => {
+  $('vResetConfirm').style.display = 'none';
+  $('vResetText').value = '';
+};
+$('vResetDo').onclick = async () => {
+  if ($('vResetText').value !== 'SIFIRLA') {
+    $('vErr').textContent = 'Devam etmek için kutuya SIFIRLA yaz.';
+    return;
+  }
+  const button = $('vResetDo'); button.disabled = true; button.textContent = 'Sıfırlanıyor...';
+  try {
+    await apiJson('/api/vault/reset', jsonOptions('POST', { confirm: 'SIFIRLA' }));
+    vBlobStr = null; vEtag = null;
+    lockVault();
+    await openVault();
+    $('vErr').style.color = 'var(--ok)';
+    $('vErr').textContent = 'Eski şifreli kasa yedeklendi. Şimdi yeni bir kasa ana parolası belirle.';
+  } catch (error) {
+    $('vErr').textContent = String(error.message || error).slice(0, 120);
+  } finally {
+    button.disabled = false; button.textContent = 'Sıfırla';
+  }
+};
+document.addEventListener('pointerdown', () => { if (currentView === 'vault') touchVault(); }, { passive: true });
+document.addEventListener('keydown', () => { if (currentView === 'vault') touchVault(); });
+window.addEventListener('blur', () => { if (currentView === 'vault' && vEntries) setTimeout(() => { if (document.hidden) lockVault(); }, 30000); });
 
 // --- tarayici eklentisinden yakalanan sifreler: kilit acikken sor ---
 let pendingTimer = null;
 async function checkPending() {
   if (!vEntries) return;
   let items = [];
-  try { items = await (await fetch('/api/vault-pending' + apiQ())).json(); } catch { return; }
+  try { items = await apiJson('/api/vault-pending'); } catch { return; }
   const box = $('vPending');
   if (!items.length) { box.style.display = 'none'; return; }
   box.style.display = '';
@@ -810,34 +2000,80 @@ async function checkPending() {
   const acts = document.createElement('div'); acts.className = 'row'; acts.style.marginTop = '8px';
   const add = document.createElement('button'); add.className = 'sBtn'; add.textContent = 'Kasaya ekle';
   add.onclick = async () => {
+    const start = vEntries.length;
     items.forEach((it) => vEntries.push({ title: (it.url || 'Site').replace(/^https?:\/\//, '').split('/')[0], url: it.url || '', username: it.username || '', password: it.password, note: 'tarayıcıdan' }));
-    await saveVault();
-    await fetch('/api/vault-pending' + apiQ(), { method: 'DELETE' });
-    box.style.display = 'none'; renderVault();
+    try {
+      await saveVault();
+      await apiFetch('/api/vault-pending', { method: 'DELETE' });
+      box.style.display = 'none'; renderVault();
+    } catch (error) { vEntries.splice(start); vaultSaveError(error); }
   };
   const skip = document.createElement('button'); skip.className = 'miniBtn'; skip.textContent = 'Yoksay';
-  skip.onclick = async () => { await fetch('/api/vault-pending' + apiQ(), { method: 'DELETE' }); box.style.display = 'none'; };
+  skip.onclick = async () => { await apiFetch('/api/vault-pending', { method: 'DELETE' }); box.style.display = 'none'; };
   acts.append(add, skip); box.appendChild(acts);
 }
 function startPendingPoll() { stopPendingPoll(); checkPending(); pendingTimer = setInterval(checkPending, 4000); }
 function stopPendingPoll() { if (pendingTimer) { clearInterval(pendingTimer); pendingTimer = null; } $('vPending').style.display = 'none'; }
 $('vSearch').oninput = renderVault;
 $('eGen').onclick = () => { $('ePass').value = VAULT.genPassword(20); };
+$('eCancel').onclick = resetVaultEntryForm;
 $('eAdd').onclick = async () => {
-  const p = $('ePass').value; if (!p || !$('eTitle').value) return;
-  vEntries.push({ title: $('eTitle').value, url: $('eUrl').value, username: $('eUser').value, password: p, note: '' });
-  await saveVault(); renderVault();
-  ['eTitle', 'eUrl', 'eUser', 'ePass'].forEach((id) => $(id).value = '');
+  const password = $('ePass').value;
+  const title = $('eTitle').value.trim();
+  if (!password || !title) { vaultSaveError(new Error('Başlık ve şifre zorunlu.')); return; }
+  const editing = vEditingIndex >= 0;
+  const index = editing ? vEditingIndex : vEntries.length;
+  const previous = editing ? vEntries[index] : null;
+  const entry = {
+    title,
+    url: $('eUrl').value.trim(),
+    username: $('eUser').value.trim(),
+    password,
+    note: previous?.note || '',
+  };
+  if (editing) vEntries[index] = entry; else vEntries.push(entry);
+  $('eAdd').disabled = true;
+  try {
+    await saveVault(); resetVaultEntryForm(); renderVault(); touchVault();
+  } catch (error) {
+    if (editing) vEntries[index] = previous; else vEntries.pop();
+    vaultSaveError(error);
+  } finally { $('eAdd').disabled = false; }
 };
+$('vChangePass').onclick = async () => {
+  const next = $('vNewPass').value;
+  const confirm = $('vNewPassConfirm').value;
+  const message = $('vPassMsg'); message.style.color = '';
+  if (next.length < 12) { message.textContent = 'Yeni kasa ana parolası en az 12 karakter olmalı.'; return; }
+  if (next !== confirm) { message.textContent = 'Yeni kasa ana parolaları eşleşmiyor.'; return; }
+  const previous = vPass;
+  const button = $('vChangePass'); button.disabled = true; button.textContent = 'Değiştiriliyor...';
+  vPass = next;
+  try {
+    await saveVault();
+    $('vNewPass').value = ''; $('vNewPassConfirm').value = '';
+    message.style.color = 'var(--ok)'; message.textContent = 'Kasa ana parolası değiştirildi.';
+    touchVault();
+  } catch (error) {
+    vPass = previous;
+    message.textContent = String(error.message || error).slice(0, 120);
+  } finally { button.disabled = false; button.textContent = 'Ana parolayı değiştir'; }
+};
+$('vCsvBtn').onclick = () => $('vCsv').click();
 $('vCsv').onchange = (ev) => {
   const f = ev.target.files[0]; if (!f) return;
+  $('vCsvName').textContent = f.name;
   const rd = new FileReader();
   rd.onload = async () => {
     const imported = VAULT.parseCSV(rd.result);
-    if (!imported.length) { alert('CSV\'de şifre bulunamadı.'); return; }
-    vEntries.push(...imported); await saveVault(); renderVault();
-    alert(imported.length + ' şifre içe aktarıldı.');
-    $('vCsv').value = '';
+    if (!imported.length) { $('vSaveErr').textContent = 'CSV içinde desteklenen şifre kaydı bulunamadı.'; return; }
+    const start = vEntries.length; vEntries.push(...imported);
+    try {
+      await saveVault(); renderVault();
+      $('vSaveErr').style.color = 'var(--ok)'; $('vSaveErr').textContent = imported.length + ' şifre içe aktarıldı.';
+      setTimeout(() => { $('vSaveErr').textContent = ''; $('vSaveErr').style.color = ''; }, 2500);
+      $('vCsv').value = ''; $('vCsvName').textContent = 'Dosya seçilmedi';
+    } catch (error) { vEntries.splice(start); vaultSaveError(error); }
   };
   rd.readAsText(f);
 };
@@ -850,7 +2086,6 @@ function tOptSync() {
   if (lbl) $('tOpt').placeholder = lbl;
 }
 $('tSel').onchange = tOptSync; tOptSync();
-$('toolsBtn').onclick = () => openModal('tools');
 async function tRun(dir) {
   try { $('tOut').value = await TOOLS.run($('tSel').value, dir, $('tIn').value, $('tOpt').value); }
   catch (e) { $('tOut').value = '⚠ ' + e.message; }
@@ -864,15 +2099,15 @@ $('tMagic').onclick = async () => {
 $('tCopy').onclick = () => copyEl('tOut', $('tCopy'));
 
 // --- ÇEVİRİ / AI ---
-$('aiBtn').onclick = () => openModal('ai');
 async function aiCall(mode, btn) {
   const text = $('aIn').value.trim(); if (!text) return;
   const t = btn.textContent; btn.textContent = 'Çalışıyor...'; btn.disabled = true; $('aOut').value = '';
   try {
-    const r = await fetch('/api/ai' + apiQ(), {
+    const r = await apiFetch('/api/ai', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode, text, model: $('aModel').value }),
     });
+    if (!r.ok) throw new Error(await r.text());
     $('aOut').value = await r.text();
   } catch (e) { $('aOut').value = '⚠ ' + e.message; }
   btn.textContent = t; btn.disabled = false;
@@ -881,36 +2116,166 @@ $('aTrans').onclick = () => aiCall('translate', $('aTrans'));
 $('aAsk').onclick = () => aiCall('chat', $('aAsk'));
 $('aCopy').onclick = () => copyEl('aOut', $('aCopy'));
 
-// Electron window.prompt desteklemiyor -> inline input
-$('newBtn').onclick = () => {
+// Electron window.prompt desteklemiyor; oluşturma/adlandırma aynı satırda yapılır.
+let nameAction = { type: 'create', source: null };
+function cleanClientName(value) {
+  return value.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+}
+function notePathForFolder(rawName, folder = selectedFolder) {
+  const leaf = cleanClientName(rawName);
+  return leaf && folder ? `${folder}/${leaf}` : leaf;
+}
+function openNameEntry(type = 'create', source = null, initial = '') {
+  showView('notes');
+  nameAction = { type, source };
   $('newRow').style.display = 'block';
-  $('newInput').focus();
-};
-$('newInput').addEventListener('keydown', async (e) => {
-  if (e.key === 'Escape') { $('newRow').style.display = 'none'; $('newInput').value = ''; }
-  if (e.key !== 'Enter') return;
-  const name = $('newInput').value.trim();
-  if (!name) return;
-  // URL yapistirildiysa: sayfa indirilip referans notuna cevrilir (zihni
-  // besleme); local AI arka planda mevcut notlarla baglanti ONERIR (haritada)
-  if (/^https?:\/\//i.test(name)) {
-    $('newInput').value = ''; $('newInput').placeholder = '🌐 indiriliyor…'; $('newInput').disabled = true;
-    try {
-      const r = await fetch('/api/ekle-url' + apiQ(), { method: 'POST', body: JSON.stringify({ url: name }) });
-      const t = await r.text();
-      if (!r.ok) throw new Error(t);
-      $('newRow').style.display = 'none';
-      $('newInput').placeholder = "Not adı ya da URL, Enter'a bas";
-    } catch (e2) {
-      $('newInput').placeholder = '⚠ ' + String(e2.message || 'eklenemedi').slice(0, 40);
-    }
-    $('newInput').disabled = false;
+  $('newInput').disabled = false;
+  $('newInput').placeholder = type === 'rename' ? 'Yeni not adı' : type === 'duplicate' ? 'Kopyanın adı' : 'Not adı ya da URL';
+  $('newInput').value = initial;
+  $('newInput').focus(); $('newInput').select();
+}
+async function createNamedNote(rawName) {
+  const name = notePathForFolder(rawName);
+  if (!name || notes.includes(name)) throw new Error(notes.includes(name) ? 'Bu adla bir not zaten var.' : 'Geçerli bir ad gir.');
+  if (send({ type: 'create', name })) return;
+  notes.push(name); notes.sort((a, b) => a.localeCompare(b, 'tr'));
+  await cacheNotePut(name, '', icerikHash(''), true);
+  await cacheListSet(notes);
+  renderList();
+  openNote(name, true);
+}
+async function captureValue(rawValue, folder = selectedFolder) {
+  const value = rawValue.trim();
+  if (!value) return;
+  if (/^https?:\/\//i.test(value)) {
+    const response = await apiFetch('/api/ekle-url', jsonOptions('POST', { url: value, folder }));
+    const text = await response.text();
+    if (!response.ok) throw new Error(text);
+    const name = text.replace(/^eklendi:\s*/i, '').trim();
+    if (name) openNote(name);
     return;
   }
-  // sunucu ismi normalize edip 'created' ile geri yollar, o acar
-  send({ type: 'create', name });
-  $('newRow').style.display = 'none'; $('newInput').value = '';
+  await createNamedNote(value);
+}
+$('newBtn').onclick = () => openNameEntry();
+$('emptyNewBtn').onclick = () => openNameEntry();
+$('newInput').addEventListener('keydown', async (e) => {
+  if (e.key === 'Escape') { $('newRow').style.display = 'none'; $('newInput').value = ''; return; }
+  if (e.key !== 'Enter') return;
+  const value = $('newInput').value.trim(); if (!value) return;
+  $('newInput').disabled = true;
+  try {
+    if (nameAction.type === 'rename') {
+      const target = notePathForFolder(value, noteParentClient(nameAction.source));
+      const response = await apiFetch('/api/note/' + encodeURIComponent(nameAction.source), jsonOptions('PATCH', { name: target }));
+      if (!response.ok) throw new Error(await response.text());
+      const result = await response.json();
+      current = result.name; $('titleText').textContent = result.name;
+    } else if (nameAction.type === 'duplicate') {
+      const name = notePathForFolder(value, noteParentClient(nameAction.source));
+      if (!name || notes.includes(name)) throw new Error('Bu adla bir not zaten var.');
+      let content = nameAction.source === current && loaded ? $('editor').value : null;
+      if (content === null) {
+        const source = await apiFetch('/api/note/' + encodeURIComponent(nameAction.source));
+        if (!source.ok) throw new Error(await source.text());
+        content = await source.text();
+      }
+      const response = await apiFetch('/api/note/' + encodeURIComponent(name), { method: 'POST', body: content });
+      if (!response.ok) throw new Error(await response.text());
+      openNote(name, true);
+    } else {
+      await captureValue(value);
+    }
+    $('newRow').style.display = 'none'; $('newInput').value = '';
+    nameAction = { type: 'create', source: null };
+  } catch (err) {
+    $('newInput').placeholder = String(err.message || 'İşlem tamamlanamadı').slice(0, 60);
+  } finally { $('newInput').disabled = false; }
 });
+$('quickAdd').onclick = async () => {
+  const value = $('quickInput').value; if (!value.trim()) return;
+  $('quickAdd').disabled = true;
+  try { await captureValue(value, ''); $('quickInput').value = ''; }
+  catch (e) { $('quickInput').value = ''; $('quickInput').placeholder = String(e.message || 'Eklenemedi').slice(0, 60); }
+  $('quickAdd').disabled = false;
+};
+$('quickInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('quickAdd').click(); });
+
+function updatePinButton() {
+  if (!current) return;
+  const pinned = pinnedNames.has(current);
+  $('pinBtn').textContent = pinned ? '★' : '☆';
+  $('pinBtn').title = pinned ? 'Sabitlemeyi kaldır' : 'Notu sabitle';
+}
+$('pinBtn').onclick = async () => {
+  if (!current) return;
+  try {
+    const result = await apiJson('/api/pins', jsonOptions('POST', { name: current }));
+    if (result.pinned) pinnedNames.add(current); else pinnedNames.delete(current);
+    updatePinButton(); loadOverview();
+  } catch (e) { $('statusText').textContent = e.message; }
+};
+$('noteMoreBtn').onclick = (e) => { e.stopPropagation(); $('noteMenu').classList.toggle('open'); };
+document.addEventListener('click', (e) => { if (!e.target.closest('#noteMenu') && e.target !== $('noteMoreBtn')) $('noteMenu').classList.remove('open'); });
+$('renameNoteBtn').onclick = () => { $('noteMenu').classList.remove('open'); if (current) openNameEntry('rename', current, noteBaseClient(current)); };
+$('duplicateNoteBtn').onclick = () => { $('noteMenu').classList.remove('open'); if (current) openNameEntry('duplicate', current, noteBaseClient(current) + ' Kopya'); };
+async function moveToTrash(name) {
+  const response = await apiFetch('/api/note/' + encodeURIComponent(name), { method: 'DELETE' });
+  if (!response.ok) throw new Error(await response.text());
+  await cacheNoteDelete(name);
+  notes = notes.filter((note) => note !== name);
+  await cacheListSet(notes);
+  renderList();
+  if (current === name) closeNote();
+  loadTrash(); loadOverview();
+}
+$('deleteNoteBtn').onclick = async () => {
+  $('noteMenu').classList.remove('open');
+  if (!current) return;
+  const name = current;
+  $('deleteNoteBtn').disabled = true;
+  try { await moveToTrash(name); } catch (e) { $('statusText').textContent = e.message; }
+  $('deleteNoteBtn').disabled = false;
+};
+async function loadTrash() {
+  const box = $('trashList'); box.innerHTML = '';
+  try {
+    const items = await apiJson('/api/trash');
+    $('trashCount').textContent = items.length ? `(${items.length})` : '';
+    if (!items.length) { box.innerHTML = '<div class="overviewSnippet">Çöp kutusu boş.</div>'; return; }
+    items.forEach((item) => {
+      const row = document.createElement('div'); row.className = 'trashRow';
+      const info = document.createElement('div');
+      const title = document.createElement('strong'); title.textContent = item.name;
+      const meta = document.createElement('small'); meta.textContent = relativeTime(item.deletedAt);
+      info.append(title, meta);
+      const actions = document.createElement('div'); actions.className = 'row';
+      const restore = document.createElement('button'); restore.className = 'sBtn gri'; restore.textContent = 'Geri yükle';
+      restore.onclick = async () => {
+        restore.disabled = true;
+        try {
+          const result = await apiJson('/api/trash/restore', jsonOptions('POST', { id: item.id }));
+          await loadTrash(); openNote(result.name);
+        } catch (e) { $('statusText').textContent = e.message; restore.disabled = false; }
+      };
+      const remove = document.createElement('button'); remove.className = 'miniBtn'; remove.textContent = 'Kalıcı sil';
+      remove.disabled = sessionRole !== 'master';
+      remove.onclick = async () => {
+        if (remove.dataset.armed !== '1') {
+          remove.dataset.armed = '1'; remove.textContent = 'Tekrar tıkla';
+          setTimeout(() => { remove.dataset.armed = ''; remove.textContent = 'Kalıcı sil'; }, 2500); return;
+        }
+        const response = await apiFetch('/api/trash/delete', jsonOptions('POST', { id: item.id }));
+        if (!response.ok) throw new Error(await response.text());
+        loadTrash(); loadOverview();
+      };
+      actions.append(restore, remove); row.append(info, actions); box.appendChild(row);
+    });
+  } catch (e) { box.textContent = e.message; }
+}
+$('trashBtn').onclick = () => { showView('notes'); $('trashPanel').classList.add('open'); loadTrash(); };
+$('trashClose').onclick = () => $('trashPanel').classList.remove('open');
+$('allNotesBtn').onclick = () => showView('notes');
 
 // ============================================================
 // EDITOR KATMANI: autocomplete + tiklanabilir link + onizleme +
@@ -927,13 +2292,21 @@ function normJs(s) {
 }
 function resolveNote(t) {
   const k = normJs(t);
-  return notes.find((n) => normJs(n) === k) || null;
+  const exact = notes.find((n) => normJs(n) === k);
+  if (exact) return exact;
+  const local = current ? notes.find((n) => noteParentClient(n) === noteParentClient(current) && normJs(noteBaseClient(n)) === k) : null;
+  if (local) return local;
+  const byBase = notes.filter((n) => normJs(noteBaseClient(n)) === k);
+  return byBase.length === 1 ? byBase[0] : null;
 }
 // [[hedef]]e git: not varsa ac, yoksa OLUSTUR (Obsidian davranisi)
 function gotoNote(t) {
   const hit = resolveNote(t);
   if (hit) openNote(hit);
-  else send({ type: 'create', name: t }); // 'created' donunce acilir
+  else {
+    const parent = current ? noteParentClient(current) : selectedFolder;
+    send({ type: 'create', name: notePathForFolder(t, parent) }); // 'created' donunce acilir
+  }
 }
 
 const ed = $('editor');
@@ -1021,22 +2394,50 @@ ed.addEventListener('click', (e) => {
 });
 
 // --- markdown onizleme: bagimliliksiz mini renderer, [[link]]ler tiklanir ---
-let previewOn = false;
+let previewOn = true; // varsayilan: okuma modu (mockup 1a)
+function updatePvBtn() {
+  const b = $('previewBtn');
+  b.textContent = previewOn ? '✏️ Düzenle' : '📖 Okuma';
+  b.classList.toggle('on', !previewOn);
+}
 function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+// inlineMd once tum kullanici metnini esc() ile HTML metin baglami icin
+// guvenli hale getirir. Uretilen etiketlerin attribute degerlerinde tirnaklar
+// ayrica kacirilmalidir; aksi halde Markdown alt metni yeni on* attribute'lari
+// acabilir. '&' burada yeniden kacirilmaz, cunku deger zaten esc()'den gecmistir.
+function escMdAttr(s) {
+  return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function safeMdUrl(value, allowFiles = false, requireSlashes = false) {
+  const candidate = String(value || '');
+  if (!candidate || /[\u0000-\u001f\u007f]/.test(candidate)) return '';
+  if (allowFiles && candidate.startsWith('files/')) return '/' + candidate;
+  if (requireSlashes ? !/^https?:\/\//.test(candidate) : !/^https?:/.test(candidate)) return '';
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+  } catch { return ''; }
+  return candidate;
+}
 function inlineMd(s) {
   s = esc(s);
   s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
   s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (t, a, src) => {
-    if (!/^(https?:\/\/|files\/)/.test(src)) return t;
-    const gercek = src.startsWith('files/') ? '/' + src + apiQ() : src;
-    return '<img src="' + gercek + '" alt="' + a + '" loading="lazy">';
+    const gercek = safeMdUrl(src, true, true);
+    if (!gercek) return t;
+    return '<img src="' + escMdAttr(gercek) + '" alt="' + escMdAttr(a) + '" loading="lazy">';
   });
-  s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (t, label, href) => {
+    const guvenli = safeMdUrl(href);
+    return guvenli
+      ? '<a href="' + escMdAttr(guvenli) + '" target="_blank" rel="noopener">' + label + '</a>'
+      : t;
+  });
   s = s.replace(/\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]/g, (t, hedef, takma) => {
     hedef = hedef.trim();
     const ok = resolveNote(hedef);
     return '<span class="wl' + (ok ? '' : ' ghost') + '" data-t="'
-      + hedef.replace(/"/g, '&quot;') + '">' + (takma || hedef) + '</span>';
+      + escMdAttr(hedef) + '">' + (takma || hedef) + '</span>';
   });
   s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
   s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
@@ -1082,10 +2483,10 @@ function showPreview() {
 }
 $('previewBtn').onclick = () => {
   previewOn = !previewOn;
-  $('previewBtn').classList.toggle('on', previewOn);
+  updatePvBtn();
   if (!current) return;
   ed.style.display = previewOn ? 'none' : '';
-  $('preview').style.display = previewOn ? '' : 'none';
+  $('preview').style.display = previewOn ? 'block' : 'none';
   if (previewOn) showPreview(); else ed.focus();
 };
 
@@ -1093,27 +2494,25 @@ $('previewBtn').onclick = () => {
 let blTimer;
 function blTimerKur() { clearTimeout(blTimer); blTimer = setTimeout(loadBacklinks, 600); }
 async function loadBacklinks() {
-  const box = $('backlinks');
+  const box = $('blPanel');
   box.innerHTML = '';
   if (!current) return;
   try {
-    const g = await fetch('/api/graph' + apiQ('gizli=1')).then((r) => r.json());
+    const g = await apiJson('/api/graph?gizli=1');
     const me = g.nodes.find((n) => n.file === current + '.md');
-    if (!me) return;
-    const gelen = g.edges.filter((e) => e.target === me.id)
-      .map((e) => g.nodes.find((n) => n.id === e.source)).filter(Boolean);
-    if (!gelen.length) return;
-    const lbl = document.createElement('span');
-    lbl.className = 'bl etiket';
-    lbl.textContent = '← bağlayanlar:';
-    box.appendChild(lbl);
-    for (const n of gelen) {
-      const c = document.createElement('span');
-      c.className = 'bl';
-      c.textContent = n.label;
-      c.title = n.description || '';
-      c.onclick = () => { const stem = (n.file || '').replace(/\.md$/, ''); if (stem) openNote(stem); };
-      box.appendChild(c);
+    if (!me) { box.innerHTML = '<div class="blBos">bağlantı yok</div>'; return; }
+    const gelen = g.edges.filter((e) => e.target === me.id).map((e) => ({ n: g.nodes.find((x) => x.id === e.source), rel: e.relation, yon: '← bağlayan' }));
+    const giden = g.edges.filter((e) => e.source === me.id).map((e) => ({ n: g.nodes.find((x) => x.id === e.target), rel: e.relation, yon: '→ bağlantı' }));
+    const hepsi = gelen.concat(giden).filter((x) => x.n);
+    if (!hepsi.length) { box.innerHTML = '<div class="blBos">bağlantı yok</div>'; return; }
+    for (const { n, rel, yon } of hepsi.slice(0, 14)) {
+      const d = document.createElement('div');
+      d.className = 'blRow';
+      const ad = document.createElement('div'); ad.className = 'blAd'; ad.textContent = n.label;
+      const alt = document.createElement('div'); alt.className = 'blRel'; alt.textContent = rel || yon;
+      d.append(ad, alt); d.title = n.description || '';
+      d.onclick = () => { const stem = (n.file || '').replace(/\.md$/, ''); if (stem) openNote(stem); else gotoNote(n.label); };
+      box.appendChild(d);
     }
   } catch (e) { /* graf gecici alinamadi, panel bos kalir */ }
 }
@@ -1131,7 +2530,7 @@ async function doSearch() {
   const q = $('searchBox').value.trim();
   if (!q) return;
   let hits = [];
-  try { hits = await fetch('/api/search' + apiQ('q=' + encodeURIComponent(q))).then((r) => r.json()); } catch {}
+  try { hits = await apiJson('/api/search?q=' + encodeURIComponent(q)); } catch {}
   const list = $('noteList');
   list.innerHTML = '';
   for (const h of hits) {
@@ -1169,7 +2568,7 @@ ed.addEventListener('paste', async (e) => {
   e.preventDefault();
   const ext = (item.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
   try {
-    const r = await fetch('/api/upload' + apiQ('ext=' + ext), { method: 'POST', body: item.getAsFile() });
+    const r = await apiFetch('/api/upload?ext=' + encodeURIComponent(ext), { method: 'POST', body: item.getAsFile() });
     if (!r.ok) throw new Error(await r.text());
     const { yol } = await r.json();
     const pos = ed.selectionStart;
@@ -1182,32 +2581,56 @@ ed.addEventListener('paste', async (e) => {
   }
 });
 
-// --- 📎 belge ekle: PDF/gorsel/ses/video -> motor (zihin-haritasi .venv)
-// metni/kavramlari cikarir, NOT olur. Motor bu makinede kurulu degilse
-// buton hic gorunmez; sonuc WS 'belge' mesajiyla gelir (whisper uzun surebilir).
-(async () => {
-  try {
-    const m = await fetch('/api/motor' + apiQ()).then((r) => r.json());
-    if (m && m.var) $('docBtn').style.display = '';
-  } catch {}
-})();
+// --- Belge ekle: PDF/görsel/ses/video -> yerel motor -> bağlantılı not ---
 const docFile = document.createElement('input');
 docFile.type = 'file';
 docFile.accept = '.pdf,image/*,audio/*,video/*';
-$('docBtn').addEventListener('click', () => docFile.click());
-docFile.addEventListener('change', async () => {
-  const f = docFile.files[0];
-  docFile.value = '';
+async function uploadDocument(f) {
   if (!f) return;
-  $('statusText').textContent = '📎 "' + f.name + '" yükleniyor…';
+  $('docProgress').textContent = `"${f.name}" yükleniyor...`;
+  $('statusText').textContent = `"${f.name}" yükleniyor...`;
+  $('docPickBtn').disabled = true;
   try {
-    const r = await fetch('/api/belge' + apiQ('ad=' + encodeURIComponent(f.name)), { method: 'POST', body: f });
+    const r = await apiFetch('/api/belge?ad=' + encodeURIComponent(f.name), { method: 'POST', body: f });
     if (!r.ok) throw new Error(await r.text());
-    $('statusText').textContent = '📎 motor işliyor… (ses/video dakikalar sürebilir)';
+    $('docProgress').textContent = 'Motor dosyayı işliyor. Ses ve video birkaç dakika sürebilir.';
+    $('statusText').textContent = 'Belge motor tarafından işleniyor';
   } catch (err) {
-    $('statusText').textContent = '📎 olmadı: ' + String(err.message).slice(0, 60);
+    $('docProgress').textContent = 'İşlenemedi: ' + String(err.message).slice(0, 100);
+    $('statusText').textContent = $('docProgress').textContent;
   }
+  $('docPickBtn').disabled = false;
+}
+$('docPickBtn').onclick = (e) => { e.stopPropagation(); docFile.click(); };
+$('docDrop').onclick = () => { if (!$('docPickBtn').disabled) docFile.click(); };
+$('docDrop').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('docPickBtn').click(); } };
+['dragenter', 'dragover'].forEach((name) => $('docDrop').addEventListener(name, (e) => { e.preventDefault(); $('docDrop').classList.add('drag'); }));
+['dragleave', 'drop'].forEach((name) => $('docDrop').addEventListener(name, (e) => { e.preventDefault(); $('docDrop').classList.remove('drag'); }));
+$('docDrop').addEventListener('drop', (e) => uploadDocument(e.dataTransfer.files[0]));
+docFile.addEventListener('change', async () => {
+  const file = docFile.files[0]; docFile.value = '';
+  await uploadDocument(file);
 });
+
+// --- sag panel harita karti + mobil alt gezinme (mockup 1a/1b) ---
+$('rpMap').onclick = () => $('mapBtn').click();
+document.querySelectorAll('#bottomNav [data-nav]').forEach((b) => b.onclick = () => {
+  const k = b.dataset.nav;
+  if (k === 'notes') { showView('notes'); $('sidebar').classList.toggle('open'); }
+  if (k === 'map') showView('map');
+  if (k === 'vault') showView('vault');
+  if (k === 'menu') $('mobileMenu').style.display = 'flex';
+});
+$('mobileMenuClose').onclick = () => $('mobileMenu').style.display = 'none';
+document.querySelectorAll('[data-mobile-view]').forEach((button) => {
+  button.onclick = () => showView(button.dataset.mobileView);
+});
+$('navFab').onclick = () => { showView('notes'); $('sidebar').classList.add('open'); openNameEntry(); };
+const initialView = bootNote ? 'notes'
+  : VIEW_BUTTONS[bootView] ? bootView
+    : window.matchMedia('(max-width: 720px)').matches ? 'notes' : 'overview';
+showView(initialView);
+if (bootNote) setTimeout(() => openNote(bootNote), 0);
 </script>
 </body>
 </html>

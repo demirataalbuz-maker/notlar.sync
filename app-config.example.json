@@ -1,6 +1,7 @@
 {
   "mode": "host",
   "server": "http://localhost:7777",
+  "port": 7777,
   "password": "degistir-beni",
   "gitAutoPush": false,
   "cevapModeli": "qwen3:8b",

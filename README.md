@@ -1,11 +1,13 @@
 # 🗒️ Notlar Sync
 
-İki (veya daha fazla) bilgisayar arasında **anlık senkron** çalışan, Obsidian görünümlü masaüstü not uygulaması. Bir PC'de yazdığın her harf, aynı notu açık tutan diğer PC'de anında belirir.
+İki (veya daha fazla) bilgisayar arasında **anlık senkron** çalışan, yerel öncelikli masaüstü not ve kişisel bilgi alanı. Bir cihazda yazdığın değişiklik diğer cihazlarda anında belirir; bağlantı kesilirse taslak cihazda kalır ve dönüşte çakışma korumalı gönderilir.
 
-- Electron masaüstü uygulaması, koyu tema
-- Notlar düz `.md` dosyası olarak saklanır (`notes/` klasörü)
-- WebSocket ile canlı senkron, kopunca otomatik yeniden bağlanır
-- Parola korumalı (istersen kapatılabilir: config'de `"password": ""`)
+- Electron masaüstü uygulaması ve telefona kurulabilen PWA
+- Genel Bakış, Notlar, AI Beyni, Şifre Kasası, Kodlama Araçları, Yerel AI, Belge, Kurulum, Senkron ve Ayarlar için ayrı tam sayfa menüler
+- Notlar gerçek alt klasörleri korunarak düz `.md` dosyaları halinde saklanır (`notes/` klasörü)
+- WebSocket ile canlı senkron; IndexedDB tabanlı kalıcı çevrimdışı taslak kuyruğu
+- Çöp kutusu, geri yükleme, sabitleme ve bağlantıları da güncelleyen güvenli yeniden adlandırma
+- Ana parola ile host yönetimi, her eşleşmiş cihaz için ayrı iptal edilebilir erişim anahtarı
 
 ## Kurulum (kolay yol)
 
@@ -15,12 +17,12 @@
 - **Linux:** `.deb` (önerilen) veya `.AppImage` (Ubuntu 22.04+/Debian 12+'da `sudo apt install libfuse2` gerekebilir)
 - **macOS:** `.dmg` — imzasız olduğu için ilk açılışta sağ tık → Aç gerekir
 
-İlk açılışta her şey otomatik hazırlanır: notların ve ayar dosyan ev dizininde `~/NotlarSync` klasörüne oluşturulur. Parolayı `~/NotlarSync/app-config.json` içinden değiştirmeyi unutma!
+İlk açılışta temel uygulama otomatik hazırlanır: notların ve ayar dosyan `~/NotlarSync` altında oluşturulur. İlk parola rastgele üretilir ve Electron uygulaması güvenli biçimde otomatik giriş yapar; sonrasında **Ayarlar → Güvenlik** bölümünden değiştirebilirsin. PDF, OCR, Whisper ve yerel AI gibi ağır çalışma bileşenleri **Kurulum Merkezi → Eksiklerin tümünü kur** ile uygulama içinden kurulabilir.
 
 ## Kurulum (kaynak koddan)
 
 ```bash
-git clone https://github.com/demirataalbuz-maker/notlar-sync.git && cd notlar-sync
+git clone https://github.com/demirataalbuz-maker/notlar.sync.git notlar-sync && cd notlar-sync
 npm install
 npm start
 ```
@@ -29,30 +31,25 @@ Ayar dosyası ilk açılışta `~/NotlarSync/app-config.json` olarak oluşur.
 
 ## İki PC'yi bağlama
 
-Bir PC **host** olur (sunucu onun içinde çalışır), diğerleri **client** olarak bağlanır.
+Bir PC **ana cihaz** olur (sunucu onun içinde çalışır), diğerleri iptal edilebilir cihaz anahtarıyla bağlanır.
 
 **Host PC** — `~/NotlarSync/app-config.json`:
 ```json
 { "mode": "host", "password": "guclu-bir-parola" }
 ```
 
-**Client PC** — `~/NotlarSync/app-config.json`:
-```json
-{ "mode": "client", "server": "http://HOST_ADRESI:7777" }
-```
-
-Client ilk açılışta ekranda parola sorar; host'taki parolayı gir.
+Ana cihazda **Senkron ve Cihazlar → Eşleştirme kodu üret** düğmesine bas. Yeni cihazın ilk kurulum ekranında adresi, cihaz adını ve 6 haneli kodu gir; iki cihaz da onay verince yalnız o cihaza ait bir anahtar atanır. Kaybolan cihazı aynı sayfadan iptal etmek diğer cihazları etkilemez.
 
 ## Farklı ağlardan erişim
 
-En kolay ve güvenli yol [Tailscale](https://tailscale.com): iki PC'ye de kur, aynı hesapla gir, client config'inde host'un Tailscale IP'sini (`100.x.x.x`) kullan. Port açmak, internete servis ifşa etmek yok; trafik uçtan uca şifreli.
+En kolay ve güvenli yol [Tailscale](https://tailscale.com): iki PC'ye de kur, aynı hesapla gir ve eşleştirme ekranında ana cihazın Tailscale IP'sini (`100.x.x.x`) kullan. Port açmak, internete servis ifşa etmek yok; trafik uçtan uca şifreli.
 
 > ⚠️ Sunucuyu doğrudan internete (port yönlendirme vs.) açmayın: trafik TLS'siz, parola tek koruma katmanı. Tailscale/VPN kullanın.
 
 ## Bilinen kısıtlar
 
-- Çakışma modeli **son yazan kazanır**: iki kişi aynı anda aynı nota yazarsa imleç zıplayabilir, tuş vuruşu kaybolabilir. Bu bir ortak-yazım (CRDT) editörü değil, kişisel senkron not defteridir.
-- İlk kurulumda parola otomatik rastgele üretilir (`~/NotlarSync/app-config.json`); client'lara bunu girmen gerekir.
+- Bu bir ortak-yazım CRDT editörü değildir. Aynı not iki cihazda eşzamanlı değiştirilirse sürümler sessizce ezilmez; yerel sürüm zaman damgalı bir çakışma notuna alınır.
+- Şifre kasasının ana parolası kurtarılamaz. Sunucu bu parolayı veya çözülmüş kasa içeriğini bilmez.
 
 ## Otomatik GitHub yedeği
 
@@ -64,40 +61,82 @@ git init -b main
 git remote add origin git@github.com:KULLANICI/notlarim.git   # OZEL repo olsun!
 ```
 
-sonra config'de `"gitAutoPush": true` yap. Artık her değişiklikten ~30sn sonra arkada sessizce commit + push atılır. Parolalı `app-config.json` otomatik `.gitignore`'a alınır, repoya asla girmez.
+sonra Ayarlar'dan **GitHub otomatik yedek** seçeneğini aç. Her değişiklikten yaklaşık 30 saniye sonra sessizce commit/push yapılır. `app-config.json`, cihaz tokenları, kasa blobları ve geçici AI dosyaları otomatik `.gitignore`'a alınır.
 
-## AI entegrasyonu (Claude Code, Codex, ...)
+## AI Beyni: Codex, Claude ve diğer ajanlar
 
-Notlar düz `.md` dosyası olduğu için AI ajanları doğrudan okuyup yazabilir. Uzak cihazdaki AI'lar için REST API:
+Notlar Sync farklı AI istemcileri için ortak, kalıcı ve yerel bir beyin görevi görür. Tek bir büyüyen `AI-Hafiza.md` yerine proje kapsamlı yapılandırılmış kayıtlar kullanır:
+
+- kullanıcı tercihleri ve kalıcı olgular
+- proje kararları ve açık görevler
+- AI oturumları, olaylar ve heartbeat durumu
+- tamamlanan işler, değişen dosyalar ve sıradaki adımı içeren checkpointler
+- isteğe bağlı konuşma özetleri; tam arşiv varsayılan olarak kapalıdır
+
+Veri `~/NotlarSync/memory/` altında `0700/0600` izinleriyle tutulur ve otomatik Git yedeğine dahil edilmez. Parola, token, özel anahtar ve yaygın API anahtarı biçimleri kayıt öncesinde redakte edilir. Bir ajan çökerse 30 dakika sonra oturum `interrupted` olur ve son checkpoint kurtarma bağlamı olarak kalır.
+
+### Temporal fact katmanı (zaman + provenance)
+
+Hafıza yalnız "ne kaydedildi" değil, **bir bilginin ne zaman doğru olduğunu, kimin yazdığını ve neyle değiştiğini** de tutar. Her fact `özne + yüklem + değer` üçlüsüdür ve `active / superseded / invalidated / disputed / forgotten` durumları, `confidence`, `validFrom → validTo` geçerlilik aralığı ve kaynak zinciri (ajan → oturum → checkpoint/olay/not) taşır:
+
+- Aynı özne+yüklem için yeni değer eskisini **silmez**: eski kayıt `superseded` olur, `validTo` alır ve iki kayıt `supersedes / supersededBy` ile bağlanır.
+- Düşük güvenli veya çelişkili bilgi otomatik ezilmez; `disputed` olarak görünür kalır ve varsayılan recall'da geriye düşer.
+- Checkpoint yazıldığında kararlar, açık görevler, tamamlananlar ve riskler otomatik fact'e dönüşür; provenance zinciri `oturum → checkpoint → fact` olarak izlenebilir.
+- Her fact bir `assertionType` (`user / agent / imported / inferred / system`) ve `evidenceLevel` (`direct / derived / unverified`) taşır. Kullanıcının manuel girdisi doğrudan kanıt sayılır; ajan/import/system girdisinde en az bir session/checkpoint/event/note/file kaynağı gerekir. Kaynaksız AI iddiası kesin gerçek sayılmaz: `unverified + disputed`, en çok `0.35` güven ve recall evidence cezası alır.
+- Provenance cevabı insan-okur `explanation` yanında çözümlenmiş/çözümlenememiş session, checkpoint, event, note ve file adımlarından oluşan makine-okur `evidenceChain` döndürür. Yeni source, topic ve tag alanları da kayıt öncesi hassas veri redaksiyonundan geçer.
+- `hatirla`/recall `asOf` ("X mart ayında ne kullanıyordu?"), `includeHistorical`, `includeDisputed` ve `explain` (skor kırılımı + `whyMatched` açıklaması) parametrelerini destekler.
+- Eski yapılandırılmış hafızalar `POST /api/memory/facts/migrate` ile idempotent biçimde fact'e dönüştürülebilir.
+- Kesin aynı slot mevcut supersede kuralını kullanır. Yakın ama aynı olmayan bilgiler `conflictSuggestions` olarak döner ve kullanıcı/ajan `supersede`, `dispute` veya `keep-separate` kararı vermeden otomatik hüküm kurulmaz.
+
+`soft` ve `hard` unutma farklı güvenlik işlemleridir:
+
+- `soft`: zaman/supersede zincirini anonim tombstone olarak korur; subject, object, value, topic, tags, workspace ve kaynak file/note alanlarını `[UNUTULDU]` ile değiştirir. Eski metin recall, provenance, graph, UI, yerel indeks ve fact'e ait embedding önbellek girdisinden çıkmaz.
+- `hard`: fact'i tamamen siler, ters supersede referanslarını, indeks kaydını ve fact'e ait embedding önbellek girdisini temizler. Yalnız ana cihazda, ayrı `POST /api/memory/facts/:id/forget-hard` ucunda `{"confirm":"KALICI OLARAK UNUT"}` açık onayıyla çalışır. Geriye uyumlu `/api/memory/forget` ucu `mode: "soft" | "hard"` kabul eder; varsayılan daima `soft`tur. Cevap fact, ilişki, indeks ve embedding temizleme sayaçlarını ayrı verir.
+
+Canonical kayıt yine atomik `state.json`'dır. Recall adayları Node çalışma zamanı destekliyorsa yerel SQLite FTS5'ten, aksi halde bağımlılıksız atomik inverted-index'ten gelir. İndeks türetilmiş veridir: bozuk, eksik veya yeniden kuruluyor olduğunda sorgu otomatik olarak canonical JSON taramasına düşer. `GET /api/memory/index` durum verir; ana cihaz `POST /api/memory/index/rebuild` ile yeniden kurabilir.
+
+REST uçları: `GET/POST /api/memory/facts`, `POST /api/memory/facts/conflicts`, `GET /api/memory/facts/:id/provenance`, `POST /api/memory/facts/:id/invalidate|dispute|conflict`, `GET /api/memory/timeline?subject=...`. Temporal değerlendirme `npm run eval:temporal` ile current/historical/provenance metriklerini raporlar.
+
+### Oturum yaşam döngüsü
+
+1. `oturum_baslat`: proje ve çalışma klasörüne göre son checkpoint, kararlar, görevler ve ilgili anıları token bütçeli bağlam olarak getirir.
+2. `hatirla`: metin skoru, güncellik, proje kapsamı, bilgi grafı ve kuruluysa `nomic-embed-text` benzerliğini birlikte kullanır.
+3. `olay_kaydet`: yalnız gelecekte gerekli karar, sonuç, hata, tercih ve görevleri yapılandırılmış kaydeder.
+4. `checkpoint_yaz`: tamamlananlar, dosyalar, kararlar, riskler, açık işler ve kesin sıradaki adımı saklar.
+5. `oturum_nabiz`: uzun çalışmanın canlı olduğunu bildirir.
+6. `oturum_kapat`: final checkpointi yazar ve oturumu kapatır.
+
+**AI Beyni → Ayarlar → Bağlantıları kur / onar** işlemi kurulu Codex ve Claude Code istemcilerini kullanıcı seviyesinde yapılandırır. MCP kaydı ve yaşam döngüsü hookları birlikte kurulur. Codex güvenlik gereği hookları ilk kullanımda `/hooks` ekranından bir kez onaylatabilir. Claude Code başlangıç, prompt, araç kullanımı, sıkıştırma, durdurma ve oturum kapanışı olaylarını otomatik bağlar.
+
+MCP sunucusu 19 araç yayınlar: 8 not/graf aracı ve 11 oturum/hafıza aracı (`hafiza_gercek_yaz` ile zaman farkındalıklı fact yazımı, `hafiza_gecmisini_sor` ile timeline/provenance sorgusu dahil). Yerel sunucu kapalıysa paketli entegrasyon onu arka planda başlatmayı dener. Manuel kurulum gerekirse:
 
 ```bash
-curl "http://HOST:7777/api/notes?key=PAROLA"                      # not listesi
-curl "http://HOST:7777/api/note/AI-Hafiza?key=PAROLA"             # notu oku
-curl -X POST "http://HOST:7777/api/note/AI-Hafiza?key=PAROLA" -d "içerik"        # yaz
-curl -X POST "http://HOST:7777/api/note/AI-Hafiza?key=PAROLA&append=1" -d "satır" # sona ekle
+codex mcp add notlar-sync -- node /NOTLAR-SYNC-YOLU/mcp.js
+claude mcp add --scope user notlar-sync -- node /NOTLAR-SYNC-YOLU/mcp.js
 ```
 
-API'den yazılanlar, notu açık tutan tüm editörlerde **anında** belirir. Ajanlarının her oturumda "yaptığın işi `AI-Hafiza` notuna logla" talimatını alması için global talimat dosyasına (Claude Code: `~/.claude/CLAUDE.md`, Codex: `~/.codex/AGENTS.md`) şuna benzer kısa bir protokol bloğu ekle:
+Farklı adres için `NOTLAR_URL`, farklı yerel port için `NOTLAR_PORT` kullanılabilir. Uzak istemciler aynı yaşam döngüsünü kimlik doğrulamalı `/api/memory/*` REST uçlarıyla da çağırabilir.
 
-```markdown
-# Ortak AI hafızası
-`~/NotlarSync/notes/AI-Hafiza.md` tüm cihazlara ve AI'lara senkron ortak hafızadır.
-- Oturum başında son ~30 satırını oku — önceki oturumlarda ne yapıldığını görürsün.
-- Önemli her işten sonra sonuna tek satır log ekle:
-  `- YYYY-MM-DD HH:MM [ajan-adi] yapılan işin bir cümlelik özeti`
-- Hassas bilgi (şifre, token) YAZMA.
+```bash
+curl -X POST -H "X-Api-Key: ANAHTAR" -H "Content-Type: application/json" \
+  -d '{"agent":"özel-ajan","workspace":"/proje","project":"Proje"}' \
+  "http://HOST:7777/api/memory/session/start"
+
+curl -X POST -H "X-Api-Key: ANAHTAR" -H "Content-Type: application/json" \
+  -d '{"query":"en son nerede kaldık?","workspace":"/proje","project":"Proje"}' \
+  "http://HOST:7777/api/memory/recall"
 ```
 
-## 🕸️ Zihin Haritası
+## AI Beyni ve not grafı
 
-Uygulamanın "zihni": notlar arası `[[link]]` bağlantılarından otomatik oluşan
-interaktif bir bilgi grafiği. Kenar çubuğundaki 🕸️ düğmesine bas — notların
+**AI Beyni** ekranı projeleri, oturumları, checkpointleri, kararları, görevleri ve Markdown not grafını tek canlı yüzeyde gösterir. Aktif bağlam son checkpointi öne çıkarır; Zaman ve Kümeler görünümleri aynı kayıtları farklı düzenler. “Zihnine sor” alanı ilgili hafıza ve not kaynaklarını yerel karma aramayla getirir.
+
+Not grafı, notlar arası `[[link]]` bağlantılarından otomatik oluşur. Notların
 düğüm, `[[link]]`ler kenar olarak çizilir. En çok bağlantılı notlar büyür
 (god node), birbirine sıkı bağlı notlar öbeklere ayrılır (topluluk tespiti),
-henüz yazılmamış `[[link]]` hedefleri kesikli "hayalet" düğüm olur. Bir not
-eklenince/değişince harita **anında** kendini günceller. AI ajanlarının tuttuğu
-`AI-Hafiza` notları varsayılan olarak haritada gizlidir; harita üstündeki 🧠
-anahtarıyla dahil edebilirsin.
+henüz yazılmamış `[[link]]` hedefleri "hayalet" düğüm olur. Bir not
+eklenince/değişince graf **anında** kendini günceller. Eski `AI-Hafiza` notları
+geriye dönük uyumluluk için not arşivinde kalabilir; yeni oturum sistemi bunlara bağlı değildir.
 
 Notlarında bağlantı kurmak için Obsidian gibi `[[Not Adı]]` yaz — o nota giden
 bir kenar oluşur. AI ajanları da not yazarken `[[link]]` kullanırsa harita
@@ -118,52 +157,53 @@ kendiliğinden zenginleşir. İncelikler:
 **AI'lar için** — grafı ham dosya okumadan JSON olarak sorgula:
 
 ```bash
-curl "http://HOST:7777/api/graph?key=PAROLA"          # tüm graf (düğüm + kenar + adlı öbekler)
-curl "http://HOST:7777/api/graph?key=PAROLA&gizli=1"  # AI-Hafiza notlarını da dahil et
-curl --get "http://HOST:7777/api/graph/explain" --data-urlencode "node=Not Adı" --data-urlencode "key=PAROLA"   # düğümü komşularıyla anlat
-curl --get "http://HOST:7777/api/graph/path" --data-urlencode "from=A" --data-urlencode "to=B" --data-urlencode "key=PAROLA"  # en kısa yol
-curl "http://HOST:7777/api/graph/suggest?key=PAROLA"  # Ollama bağlantı önerileri (yazmaz, sadece önerir)
+curl -H "X-Api-Key: ANAHTAR" "http://HOST:7777/api/graph"
+curl -H "X-Api-Key: ANAHTAR" "http://HOST:7777/api/graph?gizli=1"
+curl -H "X-Api-Key: ANAHTAR" --get "http://HOST:7777/api/graph/explain" --data-urlencode "node=Not Adı"
+curl -H "X-Api-Key: ANAHTAR" --get "http://HOST:7777/api/graph/path" --data-urlencode "from=A" --data-urlencode "to=B"
+curl -H "X-Api-Key: ANAHTAR" "http://HOST:7777/api/graph/suggest"
 ```
 
-### 📎 Belge motoru ve dışa aktarma (opsiyonel, [zihin-haritasi](https://github.com/demirataalbuz-maker) ile)
+### Klasörler ve Obsidian aktarımı
 
-Aynı makinede `~/zihin-haritasi` kuruluysa (`python3 kur.py`) uygulama onu
-**arka motor** olarak bulur ve iki özellik açılır — kurulu değilse bu düğmeler
-hiç görünmez, uygulama bağımlılıksız kalır:
+Notlar ekranı disk üzerindeki gerçek iç içe klasörleri gösterir. Klasör oluşturma,
+yeniden adlandırma, boş klasör silme ve notu sürükleyerek klasöre taşıma desteklenir.
+**Notlar → İçe aktar** veya **Kurulum Merkezi → Obsidian kasalarını içe aktar**
+bilgisayardaki kasaları algılar; notları ve klasörleri kopyalar, kaynak kasaya
+dokunmaz, çakışan dosyaları ayrı kopyada korur ve ek bağlantılarını yeni konuma çevirir.
 
-- **📎 Belge ekle** (kenar çubuğu): PDF / görsel / ses / video seç — motor metni
-  çıkarır (PDF: pdftotext, ses/video: whisper, görsel: minicpm-v/llava), local AI ana
-  kavramları `[[link]]` yapar ve hepsi bir **not** olur; haritaya düşer,
-  Ollama mevcut notlarla ilişki önerir (yine onaylı kuyruğa).
-- **⬇ Dışa aktar** (haritada): SVG, GraphML (Gephi/yEd), Neo4j Cypher,
-  Obsidian kasası veya wiki sayfaları olarak.
+### Belge motoru, Kurulum Merkezi ve dışa aktarma
 
-Motor farklı bir yoldaysa `NOTLAR_MOTOR=/yol/zihin-haritasi` ortam değişkeniyle gösterilir.
+Belge ve graf motorunun çekirdeği uygulamaya gömülüdür. **Kurulum Merkezi** eksik
+bileşenleri algılar ve yalnız sabit, izinli paketleri kurar:
 
-**İkisini tek seferde kurmak** (uygulama + motor birlikte):
+- PDF metni: `pdftotext`
+- Görsel metni: Türkçe/İngilizce Tesseract OCR veya yerel vision modeli
+- Ses/video: uygulamaya özel sanal ortamda Faster Whisper
+- Yerel AI: Ollama, ayarlı metin modeli, `qwen2.5vl:3b` görsel modeli ve `nomic-embed-text` hafıza modeli
+- Dışa aktarma: gömülü SVG, GraphML, Neo4j Cypher, Obsidian ve wiki üreticileri
 
-```bash
-git clone https://github.com/demirataalbuz-maker/notlar-sync && cd notlar-sync && npm install && cd ..
-git clone https://github.com/demirataalbuz-maker/zihin-haritasi ~/zihin-haritasi && python3 ~/zihin-haritasi/kur.py
-```
-
-Sıra önemli değil: motoru sonradan kurarsan uygulama penceresini
-yenilemen (kapat/aç) yeter, 📎 kendiliğinden belirir. Motor hiç
-kurulmazsa uygulama aynen çalışır — sadece 📎 ve ⬇ düğmeleri görünmez.
+Linux'ta sistem paketleri kurulurken standart yönetici onay penceresi açılır.
+Kurulum komutları API'den değiştirilemez ve yalnız ana bilgisayardaki masaüstü
+uygulamasından başlatılabilir. Ollama kuruluysa uygulama açılışında servisi otomatik başlatır.
 
 ```bash
-curl "http://HOST:7777/api/motor?key=PAROLA"                                   # motor var mı, neleri işleyebilir?
-curl -X POST --data-binary @rapor.pdf "http://HOST:7777/api/belge?ad=rapor.pdf&key=PAROLA"   # belge -> not
-curl "http://HOST:7777/api/graph/export?format=svg&key=PAROLA" -o harita.svg   # svg | graphml | neo4j | obsidian | wiki
+curl -H "X-Api-Key: ANAHTAR" "http://HOST:7777/api/motor"
+curl -X POST -H "X-Api-Key: ANAHTAR" --data-binary @rapor.pdf "http://HOST:7777/api/belge?ad=rapor.pdf"
+curl -H "X-Api-Key: ANAHTAR" "http://HOST:7777/api/graph/export?format=svg" -o harita.svg
 ```
 
 ## 🔐 Şifre Kasası
 
 Kenar çubuğundaki 🔐 düğmesi: ana parolayla açılan sıfır-bilgi şifre kasası.
-Şifreleme/çözme tamamen cihazında yapılır (Web Crypto, PBKDF2 + AES-GCM) —
+Şifreleme/çözme tamamen cihazında yapılır (Web Crypto, PBKDF2-SHA256 600 bin tur + AES-256-GCM) —
 sunucu yalnızca şifreli blob'u saklar, **içini asla açamaz**. Tarayıcıdan CSV
 import (Chrome/Bitwarden dışa aktarımı) ve güçlü parola üretici içerir.
-Ana parolayı unutursan kurtarma yoktur; kasa açılamaz.
+Kasa hareketsizlikte otomatik kilitlenir; iki cihazdaki eski kopyalar ETag
+kontrolü sayesinde birbirini sessizce ezemez. Kayıtlar sonradan düzenlenebilir ve
+kasa ana parolası açık kasadan değiştirilebilir. Ana parolayı unutursan içerik
+kurtarılamaz; ana cihazdaki sıfırlama işlemi eski şifreli blob'u yerel yedeğe alır
+ve yeni, boş bir kasa oluşturmayı sağlar.
 
 ## 🧰 Kodlama Araçları ve 🤖 Local AI
 
@@ -180,14 +220,24 @@ Ana parolayı unutursan kurtarma yoktur; kasa açılamaz.
 
 Kurulum (Chrome/Edge/Brave):
 1. `chrome://extensions` → sağ üstten **Geliştirici modu**'nu aç
-2. **Paketlenmemiş öğe yükle** → `notlar-sync/extension` klasörünü seç
-3. Eklenti simgesine tıkla → kasa adresini (`http://localhost:7777` veya host'un Tailscale adresi) ve parolanı gir
+2. **Paketlenmemiş öğe yükle** → kaynak kodda `extension/`, paketli uygulamada `resources/extension` klasörünü seç
+3. Eklenti simgesine tıkla → kasa adresini (`http://localhost:7777` veya ana cihazın Tailscale adresi) ve ana parola/cihaz anahtarını gir
 
 Bir siteye giriş yapınca "Kaydet?" banner'ı çıkar. Kabul edersen şifre, **uygulama açık ve kasa kilidi açıkken** onayınla kasaya eklenir. Yakalanan şifre yalnızca sunucunun RAM'inde geçici durur; diske/git'e asla yazılmaz.
 
 ## Tarayıcıdan kullanım
 
 Electron şart değil — host çalışırken herhangi bir cihazdan `http://HOST_ADRESI:7777` açman yeterli. Sunucuyu tek başına çalıştırmak için: `npm run server`
+
+## Doğrulama
+
+```bash
+npm test       # API, WebSocket, çakışma, cihaz yetkisi, kasa ve dosya izinleri
+npm run check  # Node/renderer/eklenti sözdizimi
+npm run eval:temporal # current, historical ve provenance doğruluğu
+npm run eval:scale    # 10.000 fact: p50/p95, top-3, as-of, forget ve izolasyon
+npm run eval:scale -- --large # isteğe bağlı 100.000 fact ölçümü
+```
 
 ## Lisans
 

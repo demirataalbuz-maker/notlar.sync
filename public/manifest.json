@@ -4,8 +4,8 @@
   "description": "Anlik senkron not uygulamasi + AI zihni",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1e1e1e",
-  "theme_color": "#1e1e1e",
+  "background_color": "#101112",
+  "theme_color": "#101112",
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]

@@ -36,7 +36,14 @@
     const btn = ev.target.closest('button, input[type="submit"], [role="button"]');
     if (!btn) return;
     const form = btn.closest('form') || document;
-    setTimeout(() => { try { const c = findCredential(form.querySelector ? form : document); } catch {} }, 0);
+    setTimeout(() => {
+      try {
+        const c = findCredential(form.querySelector ? form : document);
+        if (c && (!lastCapture || c.password !== lastCapture.password || c.url !== lastCapture.url)) {
+          lastCapture = c; showBanner(c);
+        }
+      } catch {}
+    }, 0);
   }, true);
 
   function showBanner(cred) {
@@ -52,7 +59,20 @@
     const no = document.createElement('button');
     no.textContent = 'Hayır';
     no.style.cssText = 'background:none;color:#999;border:1px solid #3f3f3f;border-radius:6px;padding:7px 12px;cursor:pointer';
-    yes.onclick = () => { chrome.runtime.sendMessage({ type: 'save', cred }); bar.remove(); };
+    yes.onclick = () => {
+      yes.disabled = true; yes.textContent = 'Gönderiliyor...';
+      chrome.runtime.sendMessage({ type: 'save', cred }, (response) => {
+        if (chrome.runtime.lastError || !response?.ok) {
+          yes.disabled = false; yes.textContent = 'Tekrar dene';
+          const message = document.createElement('div');
+          message.style.cssText = 'color:#ff9b94;font-size:12px;margin-top:8px';
+          message.textContent = 'Notlar Sync bağlantısı kurulamadı.';
+          bar.appendChild(message);
+          return;
+        }
+        yes.textContent = 'Kaydedildi'; setTimeout(() => bar.remove(), 700);
+      });
+    };
     no.onclick = () => bar.remove();
     bar.append(yes, no);
     document.body.appendChild(bar);

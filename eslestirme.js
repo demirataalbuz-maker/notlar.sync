@@ -13,34 +13,64 @@ const crypto = require('crypto');
 
 const KOD_SURESI = 3 * 60 * 1000; // kod 3 dk sonra oluru
 const rnd = (n) => crypto.randomBytes(n).toString('hex');
+const guvenliEsit = (a, b) => {
+  const aa = Buffer.from(String(a || ''));
+  const bb = Buffer.from(String(b || ''));
+  return aa.length === bb.length && crypto.timingSafeEqual(aa, bb);
+};
+const cihazId = (token) => 'device_' + crypto.createHash('sha256').update(token).digest('hex').slice(0, 16);
 
 // --- kalici cihaz kayitlari: devices.json (token'lar = kimlik, git'e girmez) ---
 function cihazDosya(dataDir) { return path.join(dataDir, 'devices.json'); }
 
 function cihazlariOku(dataDir) {
-  try { return JSON.parse(fs.readFileSync(cihazDosya(dataDir), 'utf8')); }
+  try {
+    const list = JSON.parse(fs.readFileSync(cihazDosya(dataDir), 'utf8'));
+    return (Array.isArray(list) ? list : []).filter((c) => c && c.token).map((c) => ({
+      ...c,
+      id: c.id || cihazId(c.token),
+    }));
+  }
   catch { return []; }
 }
 function cihazlariYaz(dataDir, list) {
-  fs.writeFileSync(cihazDosya(dataDir), JSON.stringify(list, null, 1));
+  const fp = cihazDosya(dataDir);
+  const tmp = fp + '.tmp-' + process.pid + '-' + rnd(3);
+  fs.writeFileSync(tmp, JSON.stringify(list, null, 1), { mode: 0o600 });
+  try {
+    fs.renameSync(tmp, fp);
+  } catch (e) {
+    try { fs.unlinkSync(fp); } catch {}
+    fs.renameSync(tmp, fp);
+  }
+  try { fs.chmodSync(fp, 0o600); } catch {}
 }
 
 // bir token gecerli bir cihaza mi ait? (auth bu tokeni parolaya ES kabul eder)
+function cihazBul(dataDir, token) {
+  if (!token) return null;
+  return cihazlariOku(dataDir).find((c) => guvenliEsit(c.token, token)) || null;
+}
 function tokenGecerli(dataDir, token) {
-  if (!token) return false;
-  return cihazlariOku(dataDir).some((c) => c.token === token);
+  return !!cihazBul(dataDir, token);
 }
 
 // token'in "son gorulme"sini tazele (cihaz listesinde kimin aktif oldugu belli olsun)
 function tokenGoruldu(dataDir, token, simdi) {
   const list = cihazlariOku(dataDir);
-  const c = list.find((x) => x.token === token);
+  const c = list.find((x) => guvenliEsit(x.token, token));
   if (c && c.sonGorulme !== simdi) { c.sonGorulme = simdi; cihazlariYaz(dataDir, list); }
 }
 
-function cihazSil(dataDir, token) {
+// UI ve API ham bearer token'i hic gormez; iptal islemi guvenli cihaz kimligiyle yapilir.
+function cihazlariPublic(dataDir) {
+  return cihazlariOku(dataDir).map(({ token, ...c }) => c);
+}
+
+function cihazSil(dataDir, id) {
   const list = cihazlariOku(dataDir);
-  const kalan = list.filter((c) => c.token !== token);
+  // Eski istemciler icin token kabul edilir, fakat liste ucundan artik token donmez.
+  const kalan = list.filter((c) => c.id !== id && !guvenliEsit(c.token, id));
   if (kalan.length !== list.length) { cihazlariYaz(dataDir, kalan); return true; }
   return false;
 }
@@ -94,7 +124,7 @@ function onayla(kod, taraf, claimId, dataDir, zamanEt) {
   if (o.hostOnay && o.cihazOnay && !o.token) {
     o.token = 'dev_' + rnd(24);
     const list = cihazlariOku(dataDir);
-    list.push({ token: o.token, ad: o.cihazAdi, eklendi: zamanEt, sonGorulme: zamanEt });
+    list.push({ id: cihazId(o.token), token: o.token, ad: o.cihazAdi, eklendi: zamanEt, sonGorulme: zamanEt });
     cihazlariYaz(dataDir, list);
     o.bitti = true;
   }
@@ -135,6 +165,6 @@ function bekleyenTalepler() {
 }
 
 module.exports = {
-  KOD_SURESI, cihazlariOku, tokenGecerli, tokenGoruldu, cihazSil,
+  KOD_SURESI, cihazlariOku, cihazlariPublic, cihazBul, tokenGecerli, tokenGoruldu, cihazSil,
   kodUret, talep, onayla, durum, reddet, bekleyenTalepler,
 };
