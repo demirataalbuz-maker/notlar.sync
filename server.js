@@ -908,6 +908,11 @@ const KONSEY_MODELS = {
   Codex: new Set(['gpt-5.5', 'gpt-5-codex', 'o3']),
 };
 let konseyActive = 0;
+// AVCI motoru: Avci kaynak dizininde motor.py'yi calistirir, sonra katalogu notes'a aktarir.
+const AVCI_DIR = path.join(require('os').homedir(), 'ai-saldiri-avcisi');
+const AVCI_EXPORT = path.join(__dirname, 'avci', 'notlara_aktar.py');
+const AVCI_MOTOR_LOG = path.join(__dirname, 'avci', 'motor.log');
+let avciMotor = { running: false, katalog: '', kapsam: '', startedAt: 0 };
 function konseyPrompt(isim, soru, transcript) {
   return (
     `Sen '${isim}' adli bir yapay zekasin ve bir kanalda bir insan ile baska bir yapay zeka ` +
@@ -1294,6 +1299,38 @@ function handleApi(req, res, url) {
       .then((status) => txt(200, JSON.stringify(status), 'application/json'))
       .catch((error) => txt(200, JSON.stringify({ online: false, reason: String(error.message || error), checkedAt: Date.now() }), 'application/json'));
     return;
+  }
+
+  if (url.pathname === '/api/avci/motor' && req.method === 'GET') {
+    if (!masterOnly()) return;
+    let log = '';
+    try { log = fs.readFileSync(AVCI_MOTOR_LOG, 'utf8').slice(-4000); } catch {}
+    return txt(200, JSON.stringify({ running: avciMotor.running, katalog: avciMotor.katalog, kapsam: avciMotor.kapsam, startedAt: avciMotor.startedAt, log }), 'application/json');
+  }
+
+  if (url.pathname === '/api/avci/motor' && req.method === 'POST') {
+    if (!masterOnly() || !localOnly()) return;
+    return readBody(req, (err, body) => {
+      if (err) return txt(400, err);
+      if (avciMotor.running) return txt(429, 'motor zaten calisiyor');
+      const katalog = String((body && body.katalog) || 'ai').toLowerCase();
+      if (!['ai', 'web', 'silah'].includes(katalog)) return txt(400, 'gecersiz katalog');
+      let kapsam = String((body && body.kapsam) || 'hepsi').trim();
+      if (!/^[A-Za-z0-9-]{1,40}$/.test(kapsam)) kapsam = 'hepsi';
+      // motor.py (Avci dizininde, MOTOR_KATALOG ile) -> ardindan katalogu notes'a aktar.
+      const cmd = `cd ${JSON.stringify(AVCI_DIR)} && python3 motor.py ${kapsam} ; python3 ${JSON.stringify(AVCI_EXPORT)}`;
+      let child, out;
+      try {
+        fs.writeFileSync(AVCI_MOTOR_LOG, `# motor basladi katalog=${katalog} kapsam=${kapsam} @${new Date().toISOString()}\n`);
+        out = fs.openSync(AVCI_MOTOR_LOG, 'a');
+        child = spawn('bash', ['-c', cmd], { env: { ...KONSEY_ENV, MOTOR_KATALOG: katalog }, stdio: ['ignore', out, out] });
+      } catch (spawnErr) { return txt(500, String(spawnErr.message || spawnErr)); }
+      try { fs.closeSync(out); } catch {}
+      avciMotor = { running: true, katalog, kapsam, startedAt: Date.now() };
+      child.on('exit', () => { avciMotor.running = false; try { broadcast({ type: 'avci-motor', done: true }); } catch {} });
+      child.on('error', () => { avciMotor.running = false; });
+      return txt(200, JSON.stringify({ started: true, katalog, kapsam }), 'application/json');
+    });
   }
 
   if (url.pathname === '/api/session' && req.method === 'GET') {
