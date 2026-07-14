@@ -34,6 +34,7 @@ def safe_part(value):
     clean = KIRP.sub(' ', clean)
     clean = re.sub(r'\s+', ' ', clean).strip()
     clean = re.sub(r'[. ]+$', '', clean)[:120]
+    clean = re.sub(r'[. ]+$', '', clean)
     if not clean or clean in ('.', '..') or clean.startswith('.') or WINDOWS_RESERVED.match(clean):
         return ''
     return clean
