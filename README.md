@@ -232,7 +232,9 @@ token veya özel sır yapıştırma. Konsey yalnız ana masaüstündeki yerel is
 çalıştırılabilir ve sohbet istenirse normal Markdown nota kaydedilebilir; kaydedilen
 not peer senkronuna dahildir.
 
-**AI Saldırı Avcısı** ayrı bir yerel uygulamadır. Notlar Sync yalnız servis durumunu
+**AI Saldırı Avcısı** ayrı bir yerel uygulamadır. Motor varsayılan olarak Claude'un
+araştırdığı, Codex'in denetlediği ve Python'un kaynak metnini doğruladığı zinciri kullanır;
+senaryo metni AI tarafından uydurulmaz. Notlar Sync yalnız servis durumunu
 yoklar ve hazırsa arayüzünü çerçeveler; notları veya eşleştirme anahtarlarını ona
 aktarmaz. Varsayılan adres `http://127.0.0.1:7788/` olup Ayarlar'dan başka bir yerel
 http/https adresine değiştirilebilir. Servis kapalıysa boş ekran yerine durum ve

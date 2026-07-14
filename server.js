@@ -1318,7 +1318,9 @@ function handleApi(req, res, url) {
       let kapsam = String((body && body.kapsam) || 'hepsi').trim();
       if (!/^[A-Za-z0-9-]{1,40}$/.test(kapsam)) kapsam = 'hepsi';
       // motor.py (Avci dizininde, MOTOR_KATALOG ile) -> ardindan katalogu notes'a aktar.
-      const cmd = `cd ${JSON.stringify(AVCI_DIR)} && python3 motor.py ${kapsam} ; python3 ${JSON.stringify(AVCI_EXPORT)}`;
+      // Arayuz butonu varsayilan olarak gercek AI arastirma zincirini calistirir:
+      // Claude arastirir, Codex denetler, Python kaynak metnini dogrular.
+      const cmd = `cd ${JSON.stringify(AVCI_DIR)} && python3 motor.py ${kapsam} --ai ; python3 ${JSON.stringify(AVCI_EXPORT)}`;
       let child, out;
       try {
         fs.writeFileSync(AVCI_MOTOR_LOG, `# motor basladi katalog=${katalog} kapsam=${kapsam} @${new Date().toISOString()}\n`);
