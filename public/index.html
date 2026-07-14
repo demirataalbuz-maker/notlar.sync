@@ -901,6 +901,10 @@
     .avciStateActions { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
     .avciNav { width: 300px; min-width: 220px; overflow-y: auto; border-right: 1px solid var(--border); padding: 10px 8px; background: var(--panel); }
     .avciReader { flex: 1; min-width: 0; overflow-y: auto; padding: 24px 28px; line-height: 1.65; }
+    .avciActions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: -6px 0 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
+    .avciActions .miniBtn.danger { border-color: #d9534f55; color: #ff8f88; }
+    .avciActions .miniBtn.danger:hover { background: #d9534f22; }
+    .avciActStatus { font-size: 12px; color: var(--muted); margin-left: 4px; }
     .avciReader h1, .avciReader h2, .avciReader h3 { color: var(--head); margin: 18px 0 8px; }
     .avciReader h2 { font-size: 17px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
     .avciReader h3 { font-size: 14px; }
@@ -1879,6 +1883,15 @@ async function avciModSec(m) {
 }
 document.querySelectorAll('#avciGiris .avciKart').forEach((k) => { k.onclick = () => avciModSec(k.dataset.mod); });
 $('avciLogo').onclick = avciReset;
+function _avciFrontmatter(raw) {
+  const m = raw.match(/^---\n([\s\S]*?)\n---\n/);
+  const fm = {};
+  if (m) for (const line of m[1].split('\n')) {
+    const i = line.indexOf(':');
+    if (i > 0) fm[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  return fm;
+}
 async function avciOpen(name) {
   $('avciNav').querySelectorAll('.avciItem').forEach((el) => el.classList.toggle('active', el.dataset.note === name));
   const reader = $('avciReader');
@@ -1886,12 +1899,54 @@ async function avciOpen(name) {
   try {
     const res = await apiFetch('/api/note/' + encodeURIComponent(name));
     if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
-    const text = (await res.text()).replace(/^---\n[\s\S]*?\n---\n+/, '');
-    reader.innerHTML = renderMd(text);
+    const raw = await res.text();
+    const fm = _avciFrontmatter(raw);
+    const text = raw.replace(/^---\n[\s\S]*?\n---\n+/, '');
+    let bar = '';
+    if (fm.kategori === 'Avcı-Senaryo' && fm.teknik && fm.url) {
+      const anlatEt = fm.anlatildi ? '🔁 Yeniden anlat' : '🎯 Nasıl yapılır?';
+      bar = `<div class="avciActions">
+        <button class="miniBtn" data-act="anlat" data-motor="ollama">${anlatEt}</button>
+        <button class="miniBtn" data-act="anlat" data-motor="codex">🔁 Codex</button>
+        <button class="miniBtn" data-act="anlat" data-motor="claude">🔁 Claude</button>
+        <button class="miniBtn danger" data-act="sil">🗑️ Sil</button>
+        <span class="avciActStatus"></span></div>`;
+    }
+    reader.innerHTML = bar + renderMd(text);
+    reader.querySelectorAll('.avciActions button').forEach((b) => { b.onclick = () => avciDuzenle(b, fm, name); });
     reader.scrollTop = 0;
   } catch (error) {
     avciBos(reader, 'Not açılamadı: ' + (error.message || error));
   }
+}
+async function avciDuzenle(btn, fm, name) {
+  const islem = btn.dataset.act;
+  const motor = btn.dataset.motor || 'ollama';
+  if (islem === 'sil' && !confirm('Bu senaryo kalıcı olarak silinsin mi?')) return;
+  const barEl = btn.closest('.avciActions');
+  const durum = barEl.querySelector('.avciActStatus');
+  barEl.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  durum.textContent = islem === 'sil' ? '🗑️ siliniyor…'
+    : (motor === 'ollama' ? '🎯 local anlatıyor…' : `🔁 ${motor} anlatıyor (uzun sürebilir)…`);
+  try {
+    await apiJson('/api/avci/duzenle', jsonOptions('POST', { katalog: avciMod || 'ai', islem, tid: fm.teknik, url: fm.url, motor }));
+    avciDuzenlePoll(islem, name);
+  } catch (error) {
+    durum.textContent = 'Hata: ' + (error.message || error);
+    barEl.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+  }
+}
+async function avciDuzenlePoll(islem, name) {
+  try {
+    const st = await apiJson('/api/avci/duzenle');
+    if (!st.running) {
+      await avciNotlariCek();
+      if (islem === 'sil') avciModSec(avciMod);   // not silindi -> listeyi tazele
+      else avciOpen(name);                         // açıklama eklendi -> notu yeniden aç
+      return;
+    }
+  } catch {}
+  if (currentView === 'avci') setTimeout(() => avciDuzenlePoll(islem, name), 3000);
 }
 async function avciMotorBaslat(ai) {
   const buttons = [$('avciAiBtn'), $('avciPlainBtn')];

@@ -915,6 +915,8 @@ const AVCI_MOTOR_LOG = path.join(__dirname, 'avci', 'motor.log');
 let avciMotor = { running: false, katalog: '', kapsam: '', startedAt: 0 };
 let avciBakim = { running: false, katalog: '', startedAt: 0 };
 const AVCI_BAKIM_LOG = path.join(__dirname, 'avci', 'bakim.log');
+let avciDuzenle = { running: false, islem: '', tid: '', startedAt: 0 };
+const AVCI_DUZENLE_LOG = path.join(__dirname, 'avci', 'duzenle.log');
 function konseyPrompt(isim, soru, transcript) {
   return (
     `Sen '${isim}' adli bir yapay zekasin ve bir kanalda bir insan ile baska bir yapay zeka ` +
@@ -1314,7 +1316,7 @@ function handleApi(req, res, url) {
     if (!masterOnly() || !localOnly()) return;
     return readBody(req, (err, body) => {
       if (err) return txt(400, err);
-      if (avciMotor.running) return txt(429, 'motor zaten calisiyor');
+      if (avciMotor.running || avciBakim.running || avciDuzenle.running) return txt(429, 'baska bir avci islemi calisiyor');
       const katalog = String((body && body.katalog) || 'ai').toLowerCase();
       if (!['ai', 'web', 'silah'].includes(katalog)) return txt(400, 'gecersiz katalog');
       let kapsam = String((body && body.kapsam) || 'hepsi').trim();
@@ -1357,8 +1359,7 @@ function handleApi(req, res, url) {
     if (!masterOnly() || !localOnly()) return;
     return readBody(req, (err, body) => {
       if (err) return txt(400, err);
-      if (avciBakim.running) return txt(429, 'bakim zaten calisiyor');
-      if (avciMotor.running) return txt(429, 'motor calisiyor, once bitmesini bekleyin');
+      if (avciBakim.running || avciMotor.running || avciDuzenle.running) return txt(429, 'baska bir avci islemi calisiyor, once bitmesini bekleyin');
       const katalog = String((body && body.katalog) || 'ai').toLowerCase();
       if (!['ai', 'web', 'silah'].includes(katalog)) return txt(400, 'gecersiz katalog');
       // AI ayni-olay birlestirmesi opsiyonel (Codex CLI kullanir, yavas olabilir).
@@ -1380,6 +1381,51 @@ function handleApi(req, res, url) {
       child.on('exit', () => { avciBakim.running = false; try { broadcast({ type: 'avci-bakim', done: true }); } catch {} });
       child.on('error', () => { avciBakim.running = false; });
       return txt(200, JSON.stringify({ started: true, katalog, ai }), 'application/json');
+    });
+  }
+
+  if (url.pathname === '/api/avci/duzenle' && req.method === 'GET') {
+    if (!masterOnly()) return;
+    let log = '';
+    try { log = fs.readFileSync(AVCI_DUZENLE_LOG, 'utf8').slice(-2000); } catch {}
+    return txt(200, JSON.stringify({ running: avciDuzenle.running, islem: avciDuzenle.islem, tid: avciDuzenle.tid, startedAt: avciDuzenle.startedAt, log }), 'application/json');
+  }
+
+  if (url.pathname === '/api/avci/duzenle' && req.method === 'POST') {
+    if (!masterOnly() || !localOnly()) return;
+    return readBody(req, (err, body) => {
+      if (err) return txt(400, err);
+      if (avciDuzenle.running || avciMotor.running || avciBakim.running) return txt(429, 'baska bir avci islemi calisiyor');
+      const b = body || {};
+      const katalog = String(b.katalog || 'ai').toLowerCase();
+      if (!['ai', 'web', 'silah'].includes(katalog)) return txt(400, 'gecersiz katalog');
+      const islem = String(b.islem || '').toLowerCase();
+      if (!['anlat', 'sil'].includes(islem)) return txt(400, 'islem anlat ya da sil olmali');
+      const tid = String(b.tid || '').trim();
+      if (!/^[A-Za-z0-9-]{1,40}$/.test(tid)) return txt(400, 'gecersiz teknik id');
+      const hedefUrl = String(b.url || '').trim();
+      if (!/^https?:\/\//.test(hedefUrl) || hedefUrl.length > 2000) return txt(400, 'gecersiz url');
+      const motorAdi = ['ollama', 'codex', 'claude'].includes(String(b.motor)) ? String(b.motor) : 'ollama';
+      // duzenle.py (env ile) -> ardindan katalogu tekrar notlara aktar.
+      const cmd = `cd ${JSON.stringify(AVCI_DIR)} && python3 duzenle.py ; python3 ${JSON.stringify(AVCI_EXPORT)}`;
+      let child, out;
+      try {
+        fs.writeFileSync(AVCI_DUZENLE_LOG, `# duzenle islem=${islem} tid=${tid} motor=${motorAdi} @${new Date().toISOString()}\n`);
+        out = fs.openSync(AVCI_DUZENLE_LOG, 'a');
+        child = spawn('bash', ['-c', cmd], { env: {
+          ...KONSEY_ENV,
+          MOTOR_KATALOG: katalog,
+          ISLEM: islem,
+          HEDEF_TID: tid,
+          HEDEF_URL: hedefUrl,
+          ANLAT_MOTOR: motorAdi,
+        }, stdio: ['ignore', out, out] });
+      } catch (spawnErr) { return txt(500, String(spawnErr.message || spawnErr)); }
+      try { fs.closeSync(out); } catch {}
+      avciDuzenle = { running: true, islem, tid, startedAt: Date.now() };
+      child.on('exit', () => { avciDuzenle.running = false; try { broadcast({ type: 'avci-duzenle', done: true, islem }); } catch {} });
+      child.on('error', () => { avciDuzenle.running = false; });
+      return txt(200, JSON.stringify({ started: true, islem, tid, motor: motorAdi }), 'application/json');
     });
   }
 

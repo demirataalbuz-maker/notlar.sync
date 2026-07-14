@@ -91,16 +91,24 @@ def senaryo_yaz(kok_parts, grup_ad, kayitlar, tid):
             govde += f"[{baslik}]({url})\n\n"
         if ek:
             govde += f"> {ek}\n"
+        aciklama = (s.get("aciklama") or "").strip()
+        if aciklama:
+            motor_ad = s.get("aciklama_motor", "")
+            govde += (f"\n---\n\n## 🎯 Nasıl yapılır (saldırgan gözüyle)\n"
+                      f"<small>_{motor_ad} ile üretildi_</small>\n\n{aciklama}\n")
         meta = {"kategori": "Avcı-Senaryo", "teknik": tid, "kaynak": s.get("kaynak"), "url": url}
         if isinstance(skor, (int, float)):
             meta["skor"] = skor
         if tur:
             meta["kaynak_turu"] = tur
+        if aciklama:
+            meta["anlatildi"] = s.get("aciklama_motor", "1")
         yaz(list(kok_parts) + ["Senaryolar", grup_ad, baslik], meta, govde)
         say += 1
     return say
 
 def main():
+    global KOK
     import teknikler, araclar, silahlar, web_teknikler
     senaryolar = load_json("senaryolar.json")
     web_sen = load_json("web_senaryolar.json")
@@ -108,9 +116,16 @@ def main():
     avlanan = load_json("avlanan.json").get("ornekler", {})
     taktik_sira = getattr(teknikler, "TAKTIK_SIRA", [])
 
-    kok_yol = os.path.join(NOTES, safe_part(KOK))
-    if os.path.isdir(kok_yol):
-        shutil.rmtree(kok_yol)
+    # ATOMİK YAZIM: önce geçici klasöre yaz, tamamı bitince atomik takas et.
+    # Build yarıda kesilirse mevcut (eski) notlar HİÇ bozulmaz.
+    kok_final_ad = safe_part(KOK)
+    kok_final = os.path.join(NOTES, kok_final_ad)
+    kok_tmp_ad = kok_final_ad + "__tmp"
+    kok_tmp = os.path.join(NOTES, kok_tmp_ad)
+    kok_eski = os.path.join(NOTES, kok_final_ad + "__eski")
+    if os.path.isdir(kok_tmp):
+        shutil.rmtree(kok_tmp)
+    KOK = kok_tmp_ad          # tüm yaz() çağrıları artık geçici klasöre gider
 
     say = {"teknik": 0, "tool": 0, "web": 0, "silah": 0, "senaryo": 0}
 
@@ -170,8 +185,19 @@ def main():
         say["silah"] += 1
         say["senaryo"] += senaryo_yaz(KOK_SILAH, s.get("ad", s.get("id")), silah_sen.get(s["id"], []), s["id"])
 
+    # ATOMİK TAKAS: eski→__eski (atomik), tmp→final (atomik), __eski sil.
+    # Kök yalnızca iki rename arası mikro-saniye kaybolur; ASLA yarım kalmaz.
+    if os.path.isdir(kok_eski):
+        shutil.rmtree(kok_eski)
+    if os.path.isdir(kok_final):
+        os.rename(kok_final, kok_eski)
+    os.rename(kok_tmp, kok_final)
+    if os.path.isdir(kok_eski):
+        shutil.rmtree(kok_eski)
+    KOK = kok_final_ad
+
     toplam = sum(v for k, v in say.items())
-    print(f"AKTARILDI -> {kok_yol}")
+    print(f"AKTARILDI -> {kok_final}")
     print(f"  teknik={say['teknik']} tool={say['tool']} web={say['web']} "
           f"silah={say['silah']} senaryo={say['senaryo']}  TOPLAM={toplam}")
 
