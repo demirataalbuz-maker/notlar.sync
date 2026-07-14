@@ -1,26 +1,35 @@
 # -*- coding: utf-8 -*-
-"""AVCI -> NOTES kopru: Avci katalogunu (teknik/tool/silah/web + avlanan gercek
-ornekler) notlar-sync notes/Avci/ altina .md not olarak yazar.
+"""AVCI -> NOTES kopru (eski :7788 agac yapisini birebir yansitir).
 
-- Dosya adlari peer-sync'in safeNoteId/safePart kuraliyla NORMALIZE edilir
-  (cift bosluk/NFC cokme bug'ini tetiklememek icin).
-- Her not frontmatter'li: kategori (graph gruplamasi + zihni), id, owasp, atlas.
-- Idempotent: her calismada Avci/ altini bastan yazar (eskiyi siler).
+notes/Avcı/ altina 3 mod koku, her biri eski sidebar agaci gibi ic ice:
+  Avcı/AI Red Team/
+     Teknikler/<NN · ATLAS taktigi>/<id · ad>.md      (TAKTIK_SIRA duzeninde)
+     Araçlar/<tür>/<ad>.md
+     Senaryolar/<id · ad>/<baslik>.md                 (motorun bulduklari, ayri)
+  Avcı/AI-App Pentest/
+     Teknikler/<NN · katman>/<ad>.md
+     Senaryolar/<id · ad>/<baslik>.md
+  Avcı/Silahlar/
+     Gadgetlar/<ad>.md
+     Senaryolar/<gadget>/<baslik>.md
+
+Dosya/klasor adlari peer-sync safeNoteId kuraliyla normalize edilir.
+Idempotent: her calismada Avcı/ altini bastan yazar.
 """
 import os, re, sys, json, shutil, unicodedata
 
 AVCI_SRC = os.path.expanduser("~/ai-saldiri-avcisi")
 NOTES = os.path.expanduser("~/NotlarSync/notes")
-KOK = "Avcı"  # notes altindaki ust klasor
+KOK = "Avcı"
 sys.path.insert(0, AVCI_SRC)
 
 WINDOWS_RESERVED = re.compile(r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])$', re.I)
 KIRP = re.compile('[' + ''.join(chr(c) for c in range(0x20)) + '\x7f<>:"/\\\\|?*]')
+WEB_SIRA = ['Girdi Yüzeyi', 'Çıktı & Render', 'Ajan & Yetki', 'Sır & Kimlik', 'Kaynak & Maliyet']
 
 def safe_part(value):
-    """peer-sync safePart JS mantiginin bire bir portu."""
     if not isinstance(value, str):
-        return ''
+        value = str(value)
     clean = unicodedata.normalize('NFC', value)
     clean = KIRP.sub(' ', clean)
     clean = re.sub(r'\s+', ' ', clean).strip()
@@ -36,47 +45,47 @@ def load_json(name):
     except Exception:
         return {}
 
-def yaz(kategori, ad, meta, govde):
-    """notes/Avci/<kategori>/<ad>.md yaz."""
-    dosya_ad = safe_part(ad) or safe_part(str(meta.get("id", ""))) or "adsiz"
-    klasor = os.path.join(NOTES, safe_part(KOK), safe_part(kategori))
+def yaz(parts, meta, govde):
+    """parts: Avcı altindaki klasor segmentleri + son eleman = dosya adi."""
+    safe = [safe_part(p) for p in parts if safe_part(p)]
+    if len(safe) < 2:
+        return
+    *dirs, ad = safe
+    klasor = os.path.join(NOTES, *dirs)
     os.makedirs(klasor, exist_ok=True)
-    yol = os.path.join(klasor, dosya_ad + ".md")
-    fm = ["---"]
-    for k, v in meta.items():
-        if v:
-            fm.append(f"{k}: {v}")
-    fm.append("---")
+    yol = os.path.join(klasor, ad + ".md")
+    n = 2
+    while os.path.exists(yol):
+        yol = os.path.join(klasor, f"{ad} ({n}).md"); n += 1
+    fm = ["---"] + [f"{k}: {v}" for k, v in meta.items() if v] + ["---"]
     with open(yol, "w", encoding="utf-8") as f:
         f.write("\n".join(fm) + "\n\n" + govde.strip() + "\n")
-    return yol
 
 def ders_govde(ders):
-    parts = []
-    for baslik, metin in (ders or []):
-        parts.append(f"### {baslik}\n{metin}")
-    return "\n\n".join(parts)
+    return "\n\n".join(f"### {b}\n{m}" for b, m in (ders or []))
 
 def varyant_govde(varyantlar):
     if not varyantlar:
         return ""
-    satir = [f"- **{ad}** — {ornek}" for ad, ornek in varyantlar]
-    return "## Varyantlar / somut numaralar\n" + "\n".join(satir)
+    return "## Varyantlar / somut numaralar\n" + "\n".join(f"- **{a}** — {o}" for a, o in varyantlar)
 
-def ornek_govde(baslik, kayitlar):
-    """avlanan/senaryo gercek ornekleri -> link listesi."""
-    if not kayitlar:
-        return ""
-    satir = [f"## {baslik}"]
-    for k in kayitlar:
-        b = k.get("baslik") or k.get("url") or "kaynak"
-        url = k.get("url", "")
-        ek = k.get("ozet") or k.get("alinti") or ""
-        ek = re.sub(r'\s+', ' ', ek).strip()
-        if len(ek) > 240:
-            ek = ek[:240] + "…"
-        satir.append(f"- [{b}]({url})" + (f"\n  > {ek}" if ek else ""))
-    return "\n".join(satir)
+def senaryo_yaz(kok_parts, grup_ad, kayitlar, tid):
+    """Bir teknigin/gadgetin senaryolarini ayri notlar olarak yazar.
+    kok_parts: mod koku segment LISTESI (orn. [KOK, 'AI Red Team'])."""
+    say = 0
+    for s in (kayitlar or []):
+        baslik = s.get("baslik") or s.get("url") or "senaryo"
+        url = s.get("url", "")
+        ek = re.sub(r'\s+', ' ', (s.get("ozet") or s.get("alinti") or "")).strip()
+        govde = f"**Kaynak:** {s.get('kaynak','')}\n\n"
+        if url:
+            govde += f"[{baslik}]({url})\n\n"
+        if ek:
+            govde += f"> {ek}\n"
+        yaz(list(kok_parts) + ["Senaryolar", grup_ad, baslik],
+            {"kategori": "Avcı-Senaryo", "teknik": tid, "kaynak": s.get("kaynak"), "url": url}, govde)
+        say += 1
+    return say
 
 def main():
     import teknikler, araclar, silahlar, web_teknikler
@@ -84,68 +93,74 @@ def main():
     web_sen = load_json("web_senaryolar.json")
     silah_sen = load_json("silah_senaryolar.json")
     avlanan = load_json("avlanan.json").get("ornekler", {})
+    taktik_sira = getattr(teknikler, "TAKTIK_SIRA", [])
 
     kok_yol = os.path.join(NOTES, safe_part(KOK))
     if os.path.isdir(kok_yol):
         shutil.rmtree(kok_yol)
 
-    sayac = {}
+    say = {"teknik": 0, "tool": 0, "web": 0, "silah": 0, "senaryo": 0}
 
-    def gercek_ornekler(tid):
+    def aile_klasor(aile, sira):
+        i = sira.index(aile) if aile in sira else 98
+        return f"{i+1:02d} · {aile}"
+
+    def gercek(tid):
         return (avlanan.get(tid, []) or []) + (senaryolar.get(tid, []) or [])
 
+    # ── AI Red Team ──
+    KOK_AI = [KOK, "AI Red Team"]
     for t in teknikler.TEKNIKLER:
         meta = {"kategori": "Avcı-Teknik", "id": t.get("id"), "owasp": t.get("owasp"),
                 "atlas": t.get("atlas"), "aile": t.get("aile")}
-        govde = f"**{t.get('en','')}**\n\n> {t.get('ozet','')}\n\n"
-        govde += ders_govde(t.get("ders")) + "\n\n" + varyant_govde(t.get("varyantlar"))
-        ge = ornek_govde("Avlanan gerçek örnekler", gercek_ornekler(t.get("id")))
-        if ge:
-            govde += "\n\n" + ge
+        g = f"**{t.get('en','')}**\n\n> {t.get('ozet','')}\n\n" + ders_govde(t.get("ders")) + "\n\n" + varyant_govde(t.get("varyantlar"))
         if t.get("av"):
-            govde += "\n\n## Av sorguları\n" + "\n".join(f"- `{q}`" for q in t["av"])
-        yaz("Teknikler", t.get("ad", t.get("id")), meta, govde)
-        sayac["teknik"] = sayac.get("teknik", 0) + 1
+            g += "\n\n## Av sorguları\n" + "\n".join(f"- `{q}`" for q in t["av"])
+        yaz(KOK_AI + ["Teknikler", aile_klasor(t.get("aile", ""), taktik_sira), f"{t['id']} · {t.get('ad','')}"], meta, g)
+        say["teknik"] += 1
+        say["senaryo"] += senaryo_yaz(KOK_AI, f"{t['id']} · {t.get('ad','')}", gercek(t["id"]), t["id"])
 
     for a in araclar.ARACLAR:
-        meta = {"kategori": "Avcı-Tool", "id": a.get("id"), "tur": a.get("tur")}
-        govde = f"> {a.get('ne','')}\n\n**İlgili teknik:** {a.get('teknik','')}\n\n"
+        grup = a.get("tur", "Genel").split("(")[0].split("+")[0].strip() or "Genel"
+        g = f"> {a.get('ne','')}\n\n**İlgili teknik:** {a.get('teknik','')}\n\n"
         if a.get("link"):
-            govde += f"**Kaynak:** {a['link']}\n"
-        yaz("Araçlar", a.get("ad", a.get("id")), meta, govde)
-        sayac["tool"] = sayac.get("tool", 0) + 1
+            g += f"**Kaynak:** {a['link']}\n"
+        yaz(KOK_AI + ["Araçlar", grup, a.get("ad", a.get("id"))],
+            {"kategori": "Avcı-Tool", "id": a.get("id"), "tur": a.get("tur")}, g)
+        say["tool"] += 1
 
+    # ── AI-App Pentest ──
+    KOK_WEB = [KOK, "AI-App Pentest"]
     web_list = [v for v in vars(web_teknikler).values() if isinstance(v, list) and v and isinstance(v[0], dict)][0]
     for w in web_list:
+        katman = w.get("aile") or w.get("katman") or "Genel"
+        i = WEB_SIRA.index(katman) if katman in WEB_SIRA else 98
         meta = {"kategori": "Avcı-Web", "id": w.get("id"), "owasp": w.get("owasp"),
-                "cwe": w.get("cwe"), "atlas": w.get("atlas"), "katman": w.get("katman")}
-        govde = f"**{w.get('en','')}**\n\n> {w.get('ozet','')}\n\n"
-        govde += ders_govde(w.get("ders")) + "\n\n" + varyant_govde(w.get("varyantlar"))
-        ge = ornek_govde("Avlanan gerçek örnekler", web_sen.get(w.get("id"), []))
-        if ge:
-            govde += "\n\n" + ge
-        yaz("Web-Pentest", w.get("ad", w.get("id")), meta, govde)
-        sayac["web"] = sayac.get("web", 0) + 1
+                "cwe": w.get("cwe"), "atlas": w.get("atlas"), "katman": katman}
+        g = f"**{w.get('en','')}**\n\n> {w.get('ozet','')}\n\n" + ders_govde(w.get("ders")) + "\n\n" + varyant_govde(w.get("varyantlar"))
+        yaz(KOK_WEB + ["Teknikler", f"{i+1:02d} · {katman}", w.get("ad", w.get("id"))], meta, g)
+        say["web"] += 1
+        say["senaryo"] += senaryo_yaz(KOK_WEB, f"{w['id']} · {w.get('ad','')}", web_sen.get(w["id"], []), w["id"])
 
+    # ── Silahlar ──
+    KOK_SILAH = [KOK, "Silahlar"]
     for s in silahlar.SILAHLAR:
-        meta = {"kategori": "Avcı-Silah", "id": s.get("id"), "tur": s.get("tur"), "fiyat": s.get("fiyat")}
-        govde = f"> {s.get('ne','')}\n\n"
+        g = f"> {s.get('ne','')}\n\n"
         if s.get("saldirilar"):
-            govde += "## Neler yapılabilir\n" + "\n".join(f"- {x}" for x in s["saldirilar"]) + "\n\n"
+            g += "## Neler yapılabilir\n" + "\n".join(f"- {x}" for x in s["saldirilar"]) + "\n\n"
         if s.get("diy"):
-            govde += f"**Ucuz DIY klon:** {s['diy']}\n\n"
+            g += f"**Ucuz DIY klon:** {s['diy']}\n\n"
         if s.get("yasal"):
-            govde += f"**Yasal not:** {s['yasal']}\n\n"
-        ge = ornek_govde("Avlanan projeler", silah_sen.get(s.get("id"), []))
-        if ge:
-            govde += ge
-        yaz("Silahlar", s.get("ad", s.get("id")), meta, govde)
-        sayac["silah"] = sayac.get("silah", 0) + 1
+            g += f"**Yasal not:** {s['yasal']}\n"
+        yaz(KOK_SILAH + ["Gadgetlar", s.get("ad", s.get("id"))],
+            {"kategori": "Avcı-Silah", "id": s.get("id"), "tur": s.get("tur"), "fiyat": s.get("fiyat")}, g)
+        say["silah"] += 1
+        say["senaryo"] += senaryo_yaz(KOK_SILAH, s.get("ad", s.get("id")), silah_sen.get(s["id"], []), s["id"])
 
-    toplam = sum(sayac.values())
+    toplam = sum(v for k, v in say.items())
     print(f"AKTARILDI -> {kok_yol}")
-    print(f"  teknik={sayac.get('teknik',0)} tool={sayac.get('tool',0)} "
-          f"web={sayac.get('web',0)} silah={sayac.get('silah',0)}  TOPLAM={toplam}")
+    print(f"  teknik={say['teknik']} tool={say['tool']} web={say['web']} "
+          f"silah={say['silah']} senaryo={say['senaryo']}  TOPLAM={toplam}")
 
 if __name__ == "__main__":
     main()

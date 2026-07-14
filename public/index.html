@@ -909,6 +909,10 @@
     .avciEmpty { color: var(--muted); font-size: 13px; padding: 18px; }
     .avciGroup { margin-bottom: 6px; }
     .avciGroupHead { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 4px; }
+    .avciKlasorBas { display: block; width: 100%; text-align: left; padding: 6px 10px; border: 0; background: none; color: var(--head); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 7px; }
+    .avciKlasorBas:hover { background: var(--bg3); }
+    .avciKlasorBas .ok { display: inline-block; width: 12px; color: var(--muted); font-size: 11px; }
+    .avciKlasorBas .ksayi { color: var(--muted); font-weight: 400; font-size: 11px; }
     .avciItem { display: block; width: 100%; text-align: left; padding: 6px 10px; border-radius: 7px; color: var(--text); font-size: 13px; cursor: pointer; border: 0; background: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .avciItem:hover { background: var(--bg3); }
     .avciItem.active { background: var(--bg3); color: var(--head); box-shadow: inset 2px 0 var(--avci-renk); }
@@ -1779,10 +1783,58 @@ let avciMotorTimer = null;
 let avciMod = null;
 let avciNotesCache = [];
 const AVCI_MOD = {
-  ai:    { ikon: '🛡️', ad: 'AI Red Team', renk: '#a88bfa', gruplar: [['Avcı/Teknikler', 'Saldırı Teknikleri'], ['Avcı/Araçlar', 'AI Red Team Araçları']] },
-  silah: { ikon: '🔫', ad: 'Hacker Silahları', renk: '#ff9d5c', gruplar: [['Avcı/Silahlar', 'Donanım Gadget’ları']] },
-  web:   { ikon: '🕸️', ad: 'AI-App Pentest', renk: '#4fd1c5', gruplar: [['Avcı/Web-Pentest', 'Web Saldırı Yüzeyi']] },
+  ai:    { ikon: '🛡️', ad: 'AI Red Team', renk: '#a88bfa', kok: 'Avcı/AI Red Team' },
+  silah: { ikon: '🔫', ad: 'Hacker Silahları', renk: '#ff9d5c', kok: 'Avcı/Silahlar' },
+  web:   { ikon: '🕸️', ad: 'AI-App Pentest', renk: '#4fd1c5', kok: 'Avcı/AI-App Pentest' },
 };
+function avciAgacKur(paths, kok) {
+  const root = {};
+  for (const full of paths) {
+    const rest = full.slice(kok.length + 1).split('/');
+    let node = root;
+    for (let i = 0; i < rest.length - 1; i++) {
+      node.klasor = node.klasor || {};
+      node.klasor[rest[i]] = node.klasor[rest[i]] || {};
+      node = node.klasor[rest[i]];
+    }
+    (node.notlar = node.notlar || []).push({ ad: rest[rest.length - 1], full });
+  }
+  return root;
+}
+function avciSay(node) {
+  let n = (node.notlar || []).length;
+  for (const k in (node.klasor || {})) n += avciSay(node.klasor[k]);
+  return n;
+}
+function avciDalCiz(node, derinlik) {
+  const frag = document.createDocumentFragment();
+  for (const ad of Object.keys(node.klasor || {}).sort((a, b) => a.localeCompare(b, 'tr'))) {
+    const alt = node.klasor[ad];
+    const bas = document.createElement('button');
+    bas.className = 'avciKlasorBas'; bas.style.paddingLeft = (8 + derinlik * 12) + 'px';
+    const ok = document.createElement('span'); ok.className = 'ok'; ok.textContent = '▸';
+    const isim = document.createTextNode(' ' + ad + ' ');
+    const sayi = document.createElement('span'); sayi.className = 'ksayi'; sayi.textContent = avciSay(alt);
+    bas.append(ok, isim, sayi);
+    const ic = document.createElement('div'); ic.className = 'avciKlasorIc'; ic.style.display = 'none';
+    let dolu = false;
+    bas.onclick = () => {
+      if (!dolu) { ic.appendChild(avciDalCiz(alt, derinlik + 1)); dolu = true; }
+      const kapali = ic.style.display === 'none';
+      ic.style.display = kapali ? '' : 'none';
+      ok.textContent = kapali ? '▾' : '▸';
+    };
+    frag.append(bas, ic);
+  }
+  for (const n of (node.notlar || []).sort((a, b) => a.ad.localeCompare(b.ad, 'tr'))) {
+    const b = document.createElement('button');
+    b.className = 'avciItem'; b.style.paddingLeft = (12 + derinlik * 12) + 'px';
+    b.dataset.note = n.full; b.textContent = n.ad;
+    b.onclick = () => avciOpen(n.full);
+    frag.appendChild(b);
+  }
+  return frag;
+}
 function avciBos(el, msg) { el.innerHTML = ''; const d = document.createElement('div'); d.className = 'avciEmpty'; d.textContent = msg; el.appendChild(d); }
 function avciReset() { avciMod = null; $('avci').classList.remove('moded'); clearTimeout(avciMotorTimer); }
 async function avciNotlariCek() {
@@ -1805,27 +1857,15 @@ async function avciModSec(m) {
   const nav = $('avciNav');
   const loadId = ++avciLoadId;
   if (!avciNotesCache.length) { await avciNotlariCek(); if (loadId !== avciLoadId) return; }
-  nav.innerHTML = '';
-  let toplam = 0;
-  for (const [prefix, label] of mod.gruplar) {
-    const items = avciNotesCache.filter((n) => n.startsWith(prefix + '/'));
-    if (!items.length) continue;
-    toplam += items.length;
-    const g = document.createElement('div'); g.className = 'avciGroup';
-    const h = document.createElement('div'); h.className = 'avciGroupHead';
-    h.textContent = `${label} (${items.length})`; g.appendChild(h);
-    for (const name of items) {
-      const b = document.createElement('button');
-      b.className = 'avciItem'; b.dataset.note = name;
-      b.textContent = name.split('/').pop();
-      b.onclick = () => avciOpen(name);
-      g.appendChild(b);
-    }
-    nav.appendChild(g);
+  const paths = avciNotesCache.filter((n) => n.startsWith(mod.kok + '/'));
+  if (!paths.length) {
+    avciBos(nav, 'Bu modda kayıt yok. “Motoru çalıştır” ile veri avla.');
+    $('avciBadge').textContent = 'boş'; $('avciBadge').className = 'statusPill warn';
+    return;
   }
-  if (!toplam) avciBos(nav, 'Bu modda kayıt yok. “Motoru çalıştır” ile veri avla.');
-  $('avciBadge').textContent = toplam ? `${toplam} kayıt` : 'boş';
-  $('avciBadge').className = toplam ? 'statusPill' : 'statusPill warn';
+  nav.innerHTML = '';
+  nav.appendChild(avciDalCiz(avciAgacKur(paths, mod.kok), 0));
+  $('avciBadge').textContent = `${paths.length} kayıt`; $('avciBadge').className = 'statusPill';
 }
 document.querySelectorAll('#avciGiris .avciKart').forEach((k) => { k.onclick = () => avciModSec(k.dataset.mod); });
 $('avciLogo').onclick = avciReset;
