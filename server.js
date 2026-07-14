@@ -1318,12 +1318,14 @@ function handleApi(req, res, url) {
       let kapsam = String((body && body.kapsam) || 'hepsi').trim();
       if (!/^[A-Za-z0-9-]{1,40}$/.test(kapsam)) kapsam = 'hepsi';
       // motor.py (Avci dizininde, MOTOR_KATALOG ile) -> ardindan katalogu notes'a aktar.
-      // Arayuz butonu varsayilan olarak gercek AI arastirma zincirini calistirir:
-      // Claude arastirir, Codex denetler, Python kaynak metnini dogrular.
-      const cmd = `cd ${JSON.stringify(AVCI_DIR)} && python3 motor.py ${kapsam} --ai ; python3 ${JSON.stringify(AVCI_EXPORT)}`;
+      const ai = body && body.ai !== false;
+      const motorArg = ai ? '--ai' : '--python';
+      // AI: Claude arastirir, Codex denetler, Python kaynak metnini dogrular.
+      // AI'siz: DuckDuckGo aramasi + Python kaynak metni dogrulamasi.
+      const cmd = `cd ${JSON.stringify(AVCI_DIR)} && python3 motor.py ${kapsam} ${motorArg} ; python3 ${JSON.stringify(AVCI_EXPORT)}`;
       let child, out;
       try {
-        fs.writeFileSync(AVCI_MOTOR_LOG, `# motor basladi katalog=${katalog} kapsam=${kapsam} @${new Date().toISOString()}\n`);
+        fs.writeFileSync(AVCI_MOTOR_LOG, `# motor basladi katalog=${katalog} mod=${ai ? 'ai' : 'python'} kapsam=${kapsam} @${new Date().toISOString()}\n`);
         out = fs.openSync(AVCI_MOTOR_LOG, 'a');
         child = spawn('bash', ['-c', cmd], { env: { ...KONSEY_ENV, MOTOR_KATALOG: katalog }, stdio: ['ignore', out, out] });
       } catch (spawnErr) { return txt(500, String(spawnErr.message || spawnErr)); }

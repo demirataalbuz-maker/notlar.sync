@@ -906,6 +906,7 @@
     .avciReader a { color: var(--blue, #6cb6ff); overflow-wrap: anywhere; }
     .avciReader blockquote { border-left: 3px solid var(--accent); margin: 6px 0; padding: 2px 12px; color: var(--muted); }
     .avciReader code { background: var(--bg3); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+    .avciMotorBtns { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
     .avciEmpty { color: var(--muted); font-size: 13px; padding: 18px; }
     .avciGroup { margin-bottom: 6px; }
     .avciGroupHead { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 4px; }
@@ -956,7 +957,7 @@
       </div>
     </div>
     <div id="avciApp" class="avciApp">
-      <header class="featureTopbar"><button id="avciLogo" class="avciLogo" title="Mod seçimine dön">🛡️ AI Saldırı Avcısı</button><span class="spacer"></span><button id="avciMotorBtn" class="miniBtn">🔍 Motoru çalıştır</button><span id="avciBadge" class="statusPill">katalog</span></header>
+      <header class="featureTopbar"><button id="avciLogo" class="avciLogo" title="Mod seçimine dön">🛡️ AI Saldırı Avcısı</button><span class="spacer"></span><span class="avciMotorBtns"><button id="avciAiBtn" class="miniBtn">🧠 AI ile ara</button><button id="avciPlainBtn" class="miniBtn">🔍 AI'sız ara</button></span><span id="avciBadge" class="statusPill">katalog</span></header>
       <div class="avciStage">
         <div id="avciNav" class="avciNav"><div class="avciEmpty">Yükleniyor…</div></div>
         <div id="avciReader" class="avciReader"><div class="avciEmpty">Soldan bir başlık seç — içerik burada açılır.</div></div>
@@ -1883,25 +1884,31 @@ async function avciOpen(name) {
     avciBos(reader, 'Not açılamadı: ' + (error.message || error));
   }
 }
-$('avciMotorBtn').onclick = async () => {
-  const btn = $('avciMotorBtn');
-  btn.disabled = true; btn.textContent = 'Motor başlatılıyor…';
+async function avciMotorBaslat(ai) {
+  const buttons = [$('avciAiBtn'), $('avciPlainBtn')];
+  buttons.forEach((button) => { button.disabled = true; });
+  const active = ai ? $('avciAiBtn') : $('avciPlainBtn');
+  active.textContent = ai ? '🧠 AI aranıyor…' : '🔍 Aranıyor…';
   try {
-    await apiJson('/api/avci/motor', jsonOptions('POST', { katalog: avciMod || 'ai', kapsam: 'hepsi' }));
-    $('avciBadge').textContent = 'motor çalışıyor'; $('avciBadge').className = 'statusPill warn';
-    btn.textContent = 'Motor çalışıyor…';
+    await apiJson('/api/avci/motor', jsonOptions('POST', { katalog: avciMod || 'ai', kapsam: 'hepsi', ai }));
+    $('avciBadge').textContent = ai ? 'AI motoru çalışıyor' : 'AI’sız motor çalışıyor'; $('avciBadge').className = 'statusPill warn';
+    active.textContent = ai ? '🧠 AI çalışıyor…' : '🔍 AI’sız çalışıyor…';
     avciMotorPoll();
   } catch (error) {
-    btn.disabled = false; btn.textContent = '🔍 Motoru çalıştır';
+    buttons.forEach((button) => { button.disabled = false; });
+    $('avciAiBtn').textContent = '🧠 AI ile ara'; $('avciPlainBtn').textContent = "🔍 AI'sız ara";
     alert('Motor başlatılamadı: ' + (error.message || error));
   }
-};
+}
+$('avciAiBtn').onclick = () => avciMotorBaslat(true);
+$('avciPlainBtn').onclick = () => avciMotorBaslat(false);
 async function avciMotorPoll() {
   clearTimeout(avciMotorTimer);
   try {
     const st = await apiJson('/api/avci/motor');
     if (!st.running) {
-      $('avciMotorBtn').disabled = false; $('avciMotorBtn').textContent = '🔍 Motoru çalıştır';
+      $('avciAiBtn').disabled = false; $('avciAiBtn').textContent = '🧠 AI ile ara';
+      $('avciPlainBtn').disabled = false; $('avciPlainBtn').textContent = "🔍 AI'sız ara";
       $('avciBadge').textContent = 'katalog güncellendi'; $('avciBadge').className = 'statusPill';
       await avciNotlariCek();
       if (currentView === 'avci' && avciMod) avciModSec(avciMod);
