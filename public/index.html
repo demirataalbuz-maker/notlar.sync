@@ -871,7 +871,23 @@
   </section>
 
   <style>
-    #avci { overflow: hidden; }
+    #avci { overflow: hidden; flex-direction: column; --avci-renk: var(--accent); }
+    .avciApp { display: none; flex: 1; min-height: 0; flex-direction: column; }
+    #avci.moded .avciApp { display: flex; }
+    .avciGiris { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: var(--bg); text-align: center; }
+    #avci.moded .avciGiris { display: none; }
+    .avciGiris h1 { font-size: 30px; margin: 0; color: var(--head); }
+    .avciGiris h1 .n { color: #a88bfa; }
+    .avciGirisAlt { color: var(--muted); margin-bottom: 16px; }
+    .avciSecim { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; padding: 0 16px; }
+    .avciKart { width: 270px; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; cursor: pointer; transition: transform .12s, border-color .12s; color: var(--text); font-family: inherit; }
+    .avciKart:hover { border-color: #a88bfa; transform: translateY(-3px); }
+    .avciKart.silah:hover { border-color: #ff9d5c; }
+    .avciKart.web:hover { border-color: #4fd1c5; }
+    .avciKartIkon { font-size: 42px; }
+    .avciKartBas { font-size: 19px; font-weight: 700; margin: 10px 0 6px; color: var(--head); }
+    .avciKartAc { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .avciLogo { background: none; border: 0; color: var(--avci-renk); font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; padding: 0; }
     .avciStage { position: relative; display: flex; flex: 1; min-height: 0; background: var(--bg); }
     #avciFrame { display: none; border: none; width: 100%; height: 100%; flex: 1; min-height: 0; background: var(--bg); }
     #avciFrame.ready { display: block; }
@@ -895,7 +911,7 @@
     .avciGroupHead { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 4px; }
     .avciItem { display: block; width: 100%; text-align: left; padding: 6px 10px; border-radius: 7px; color: var(--text); font-size: 13px; cursor: pointer; border: 0; background: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .avciItem:hover { background: var(--bg3); }
-    .avciItem.active { background: var(--bg3); color: var(--head); box-shadow: inset 2px 0 var(--accent); }
+    .avciItem.active { background: var(--bg3); color: var(--head); box-shadow: inset 2px 0 var(--avci-renk); }
     @media (max-width: 720px) { .avciNav { width: 40%; min-width: 140px; } .avciReader { padding: 16px; } }
     #konsey .featureBody { display: flex; flex-direction: column; flex: 1; gap: 0; padding: 0; margin: 0; max-width: none; min-height: 0; }
     .konseyLog { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
@@ -926,10 +942,21 @@
   </style>
 
   <section id="avci" class="featureView" aria-label="AI Saldırı Avcısı">
-    <header class="featureTopbar"><h1>AI Saldırı Avcısı</h1><p>Teknik · tool · silah · web — notlar-sync içinde yerli katalog</p><span class="spacer"></span><select id="avciKatalog" class="konseyModelSel" title="Motor katalogu"><option value="ai">Motor: AI Red Team</option><option value="web">Motor: Web / AI-App</option><option value="silah">Motor: Silahlar</option></select><button id="avciMotorBtn" class="miniBtn">Motoru çalıştır</button><span id="avciBadge" class="statusPill">katalog</span></header>
-    <div class="avciStage">
-      <div id="avciNav" class="avciNav"><div class="avciEmpty">Yükleniyor…</div></div>
-      <div id="avciReader" class="avciReader"><div class="avciEmpty">Soldan bir başlık seç — içerik burada açılır.</div></div>
+    <div id="avciGiris" class="avciGiris">
+      <h1>🛡️ AI Saldırı <span class="n">Avcısı</span></h1>
+      <div class="avciGirisAlt">Hangi cephanelik knk?</div>
+      <div class="avciSecim">
+        <button class="avciKart" data-mod="ai"><div class="avciKartIkon">🛡️</div><div class="avciKartBas">AI Red Team</div><div class="avciKartAc">AI saldırı teknikleri · tool'lar · gerçek senaryolar · CVE/açıklar</div></button>
+        <button class="avciKart silah" data-mod="silah"><div class="avciKartIkon">🔫</div><div class="avciKartBas">Silahlar</div><div class="avciKartAc">Donanım gadget'ları (Flipper, ESP32, HackRF…) · ne yapar · DIY klon</div></button>
+        <button class="avciKart web" data-mod="web"><div class="avciKartIkon">🕸️</div><div class="avciKartBas">AI-App Pentest</div><div class="avciKartAc">LLM'li uygulamanın web saldırı yüzeyi · XSS/SSRF/IDOR/DoW · OWASP LLM Top10 + CWE</div></button>
+      </div>
+    </div>
+    <div id="avciApp" class="avciApp">
+      <header class="featureTopbar"><button id="avciLogo" class="avciLogo" title="Mod seçimine dön">🛡️ AI Saldırı Avcısı</button><span class="spacer"></span><button id="avciMotorBtn" class="miniBtn">🔍 Motoru çalıştır</button><span id="avciBadge" class="statusPill">katalog</span></header>
+      <div class="avciStage">
+        <div id="avciNav" class="avciNav"><div class="avciEmpty">Yükleniyor…</div></div>
+        <div id="avciReader" class="avciReader"><div class="avciEmpty">Soldan bir başlık seç — içerik burada açılır.</div></div>
+      </div>
     </div>
   </section>
 
@@ -1749,48 +1776,59 @@ async function loadMemorySettingsStatus() {
 $('settingsBrainBtn').onclick = () => showView('map');
 let avciLoadId = 0;
 let avciMotorTimer = null;
-const AVCI_GRUP = [
-  ['Avcı/Teknikler', 'AI Red Team — Teknikler'],
-  ['Avcı/Araçlar', 'Araçlar / Tool'],
-  ['Avcı/Web-Pentest', 'Web / AI-App Pentest'],
-  ['Avcı/Silahlar', 'Silahlar (donanım)'],
-];
+let avciMod = null;
+let avciNotesCache = [];
+const AVCI_MOD = {
+  ai:    { ikon: '🛡️', ad: 'AI Red Team', renk: '#a88bfa', gruplar: [['Avcı/Teknikler', 'Saldırı Teknikleri'], ['Avcı/Araçlar', 'AI Red Team Araçları']] },
+  silah: { ikon: '🔫', ad: 'Hacker Silahları', renk: '#ff9d5c', gruplar: [['Avcı/Silahlar', 'Donanım Gadget’ları']] },
+  web:   { ikon: '🕸️', ad: 'AI-App Pentest', renk: '#4fd1c5', gruplar: [['Avcı/Web-Pentest', 'Web Saldırı Yüzeyi']] },
+};
 function avciBos(el, msg) { el.innerHTML = ''; const d = document.createElement('div'); d.className = 'avciEmpty'; d.textContent = msg; el.appendChild(d); }
-async function loadAvci() {
-  const loadId = ++avciLoadId;
-  const nav = $('avciNav');
-  try {
-    const notes = await apiJson('/api/notes');
-    if (loadId !== avciLoadId || currentView !== 'avci') return;
-    const avci = notes.filter((n) => n.startsWith('Avcı/'));
-    if (!avci.length) {
-      avciBos(nav, 'Katalog boş. Üstten “Motoru çalıştır” ile veri avla.');
-      $('avciBadge').textContent = 'boş'; $('avciBadge').className = 'statusPill warn';
-      return;
-    }
-    nav.innerHTML = '';
-    for (const [prefix, label] of AVCI_GRUP) {
-      const items = avci.filter((n) => n.startsWith(prefix + '/'));
-      if (!items.length) continue;
-      const g = document.createElement('div'); g.className = 'avciGroup';
-      const h = document.createElement('div'); h.className = 'avciGroupHead';
-      h.textContent = `${label} (${items.length})`; g.appendChild(h);
-      for (const name of items) {
-        const b = document.createElement('button');
-        b.className = 'avciItem'; b.dataset.note = name;
-        b.textContent = name.split('/').pop();
-        b.onclick = () => avciOpen(name);
-        g.appendChild(b);
-      }
-      nav.appendChild(g);
-    }
-    $('avciBadge').textContent = `${avci.length} kayıt`; $('avciBadge').className = 'statusPill';
-  } catch (error) {
-    if (loadId !== avciLoadId) return;
-    avciBos(nav, 'Katalog yüklenemedi: ' + (error.message || error));
-    $('avciBadge').textContent = 'hata'; $('avciBadge').className = 'statusPill warn';
-  }
+function avciReset() { avciMod = null; $('avci').classList.remove('moded'); clearTimeout(avciMotorTimer); }
+async function avciNotlariCek() {
+  try { const notes = await apiJson('/api/notes'); avciNotesCache = notes.filter((n) => n.startsWith('Avcı/')); }
+  catch { /* sessiz: mod secince tekrar denenir */ }
 }
+async function loadAvci() {
+  // Sekme her acildiginda mod secim (giris) ekranina don.
+  avciReset();
+  await avciNotlariCek();
+}
+async function avciModSec(m) {
+  const mod = AVCI_MOD[m]; if (!mod) return;
+  avciMod = m;
+  const el = $('avci');
+  el.classList.add('moded');
+  el.style.setProperty('--avci-renk', mod.renk);
+  $('avciLogo').textContent = `${mod.ikon} ${mod.ad}`;
+  avciBos($('avciReader'), 'Soldan bir başlık seç — içerik burada açılır.');
+  const nav = $('avciNav');
+  const loadId = ++avciLoadId;
+  if (!avciNotesCache.length) { await avciNotlariCek(); if (loadId !== avciLoadId) return; }
+  nav.innerHTML = '';
+  let toplam = 0;
+  for (const [prefix, label] of mod.gruplar) {
+    const items = avciNotesCache.filter((n) => n.startsWith(prefix + '/'));
+    if (!items.length) continue;
+    toplam += items.length;
+    const g = document.createElement('div'); g.className = 'avciGroup';
+    const h = document.createElement('div'); h.className = 'avciGroupHead';
+    h.textContent = `${label} (${items.length})`; g.appendChild(h);
+    for (const name of items) {
+      const b = document.createElement('button');
+      b.className = 'avciItem'; b.dataset.note = name;
+      b.textContent = name.split('/').pop();
+      b.onclick = () => avciOpen(name);
+      g.appendChild(b);
+    }
+    nav.appendChild(g);
+  }
+  if (!toplam) avciBos(nav, 'Bu modda kayıt yok. “Motoru çalıştır” ile veri avla.');
+  $('avciBadge').textContent = toplam ? `${toplam} kayıt` : 'boş';
+  $('avciBadge').className = toplam ? 'statusPill' : 'statusPill warn';
+}
+document.querySelectorAll('#avciGiris .avciKart').forEach((k) => { k.onclick = () => avciModSec(k.dataset.mod); });
+$('avciLogo').onclick = avciReset;
 async function avciOpen(name) {
   $('avciNav').querySelectorAll('.avciItem').forEach((el) => el.classList.toggle('active', el.dataset.note === name));
   const reader = $('avciReader');
@@ -1809,12 +1847,12 @@ $('avciMotorBtn').onclick = async () => {
   const btn = $('avciMotorBtn');
   btn.disabled = true; btn.textContent = 'Motor başlatılıyor…';
   try {
-    await apiJson('/api/avci/motor', jsonOptions('POST', { katalog: $('avciKatalog').value, kapsam: 'hepsi' }));
+    await apiJson('/api/avci/motor', jsonOptions('POST', { katalog: avciMod || 'ai', kapsam: 'hepsi' }));
     $('avciBadge').textContent = 'motor çalışıyor'; $('avciBadge').className = 'statusPill warn';
     btn.textContent = 'Motor çalışıyor…';
     avciMotorPoll();
   } catch (error) {
-    btn.disabled = false; btn.textContent = 'Motoru çalıştır';
+    btn.disabled = false; btn.textContent = '🔍 Motoru çalıştır';
     alert('Motor başlatılamadı: ' + (error.message || error));
   }
 };
@@ -1823,9 +1861,10 @@ async function avciMotorPoll() {
   try {
     const st = await apiJson('/api/avci/motor');
     if (!st.running) {
-      $('avciMotorBtn').disabled = false; $('avciMotorBtn').textContent = 'Motoru çalıştır';
+      $('avciMotorBtn').disabled = false; $('avciMotorBtn').textContent = '🔍 Motoru çalıştır';
       $('avciBadge').textContent = 'katalog güncellendi'; $('avciBadge').className = 'statusPill';
-      if (currentView === 'avci') loadAvci();
+      await avciNotlariCek();
+      if (currentView === 'avci' && avciMod) avciModSec(avciMod);
       return;
     }
   } catch {}
