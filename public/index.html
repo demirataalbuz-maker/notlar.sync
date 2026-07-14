@@ -2084,11 +2084,14 @@ $('settingSave').onclick = async () => {
       if (!sessionResponse.ok) throw new Error(await sessionResponse.text());
       localStorage.removeItem('key'); key = '';
     }
+    const persisted = await apiJson('/api/settings');
+    if (githubToken && !persisted.githubTokenSet) throw new Error('GitHub token sunucuda kaydedilmedi');
+    if (nvdApiKey && !persisted.nvdApiKeySet) throw new Error('NVD anahtarı sunucuda kaydedilmedi');
+    $('settingGithubState').textContent = persisted.githubTokenSet ? 'Kayıtlı (değiştirmek için yeni token gir)' : 'Ayarlanmadı';
+    $('settingNvdState').textContent = persisted.nvdApiKeySet ? 'Kayıtlı (değiştirmek için yeni anahtar gir)' : 'Ayarlanmadı';
     $('settingsFeedback').textContent = result.restartRequired
       ? 'Kaydedildi. Mod, adres veya port değişikliği yeniden başlatmada uygulanacak.'
       : 'Değişiklikler kaydedildi.';
-    if (githubToken) $('settingGithubState').textContent = 'Kayıtlı (değiştirmek için yeni token gir)';
-    if (nvdApiKey) $('settingNvdState').textContent = 'Kayıtlı (değiştirmek için yeni anahtar gir)';
     $('settingGithubToken').value = ''; $('settingNvdKey').value = '';
   } catch (e) { $('settingsFeedback').textContent = e.message; }
   $('settingSave').disabled = sessionRole !== 'master';
