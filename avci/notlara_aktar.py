@@ -92,10 +92,17 @@ def senaryo_yaz(kok_parts, grup_ad, kayitlar, tid):
         if ek:
             govde += f"> {ek}\n"
         aciklama = (s.get("aciklama") or "").strip()
-        if aciklama:
-            motor_ad = s.get("aciklama_motor", "")
-            govde += (f"\n---\n\n## 🎯 Nasıl yapılır (saldırgan gözüyle)\n"
-                      f"<small>_{motor_ad} ile üretildi_</small>\n\n{aciklama}\n")
+        kodlar = s.get("gercek_kod") or []
+        if kodlar or aciklama:
+            govde += "\n---\n\n"
+            if kodlar:
+                govde += ("## 🧨 Kaynaktan GERÇEK payload / kod\n"
+                          "<small>_sayfadan birebir çıkarıldı — AI uydurması değil_</small>\n\n")
+                for k in kodlar:
+                    govde += "```\n" + str(k).replace("```", "'''") + "\n```\n\n"
+            if aciklama:
+                motor_ad = s.get("aciklama_motor", "")
+                govde += f"## 🔎 Nasıl yapmışlar\n<small>_{motor_ad} açıklaması_</small>\n\n{aciklama}\n"
         meta = {"kategori": "Avcı-Senaryo", "teknik": tid, "kaynak": s.get("kaynak"), "url": url}
         if isinstance(skor, (int, float)):
             meta["skor"] = skor
