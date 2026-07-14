@@ -958,7 +958,7 @@
       </div>
     </div>
     <div id="avciApp" class="avciApp">
-      <header class="featureTopbar"><button id="avciLogo" class="avciLogo" title="Mod seçimine dön">🛡️ AI Saldırı Avcısı</button><span class="spacer"></span><span class="avciMotorBtns"><button id="avciAiBtn" class="miniBtn">🧠 AI ile ara</button><button id="avciPlainBtn" class="miniBtn">🔍 AI'sız ara</button></span><span id="avciBadge" class="statusPill">katalog</span></header>
+      <header class="featureTopbar"><button id="avciLogo" class="avciLogo" title="Mod seçimine dön">🛡️ AI Saldırı Avcısı</button><span class="spacer"></span><span class="avciMotorBtns"><button id="avciAiBtn" class="miniBtn">🧠 AI ile ara</button><button id="avciPlainBtn" class="miniBtn">🔍 AI'sız ara</button><button id="avciBakimBtn" class="miniBtn" title="Aynı haber/kaynak tekrarlarını temizle">🧹 Bakım</button></span><span id="avciBadge" class="statusPill">katalog</span></header>
       <div class="avciStage">
         <div id="avciNav" class="avciNav"><div class="avciEmpty">Yükleniyor…</div></div>
         <div id="avciReader" class="avciReader"><div class="avciEmpty">Soldan bir başlık seç — içerik burada açılır.</div></div>
@@ -1911,6 +1911,38 @@ async function avciMotorBaslat(ai) {
 }
 $('avciAiBtn').onclick = () => avciMotorBaslat(true);
 $('avciPlainBtn').onclick = () => avciMotorBaslat(false);
+let avciBakimTimer = null;
+async function avciBakimBaslat() {
+  if (!confirm('Bakım başlasın mı?\nAynı haber/kaynak tekrarları ve fazla yığılan senaryolar temizlenecek (geri alınamaz).')) return;
+  const derin = confirm('AI ile DERİN birleştirme de yapılsın mı?\n\nTamam = evet (Codex aynı olayı farklı URL’lerle de yakalar; daha temiz ama yavaş).\nİptal = sadece hızlı/bedava temizlik.');
+  const btn = $('avciBakimBtn');
+  btn.disabled = true; btn.textContent = '🧹 Temizleniyor…';
+  try {
+    await apiJson('/api/avci/bakim', jsonOptions('POST', { katalog: avciMod || 'ai', ai: derin }));
+    $('avciBadge').textContent = 'bakım çalışıyor'; $('avciBadge').className = 'statusPill warn';
+    avciBakimPoll();
+  } catch (error) {
+    btn.disabled = false; btn.textContent = '🧹 Bakım';
+    alert('Bakım başlatılamadı: ' + (error.message || error));
+  }
+}
+$('avciBakimBtn').onclick = avciBakimBaslat;
+async function avciBakimPoll() {
+  clearTimeout(avciBakimTimer);
+  try {
+    const st = await apiJson('/api/avci/bakim');
+    if (!st.running) {
+      $('avciBakimBtn').disabled = false; $('avciBakimBtn').textContent = '🧹 Bakım';
+      $('avciBadge').textContent = 'bakım bitti'; $('avciBadge').className = 'statusPill';
+      const ozet = (st.log || '').split('\n').filter(l => l.includes('Bakım bitti')).pop();
+      if (ozet) $('avciBadge').title = ozet;
+      await avciNotlariCek();
+      if (currentView === 'avci' && avciMod) avciModSec(avciMod);
+      return;
+    }
+  } catch {}
+  if (currentView === 'avci') avciBakimTimer = setTimeout(avciBakimPoll, 4000);
+}
 async function avciMotorPoll() {
   clearTimeout(avciMotorTimer);
   try {

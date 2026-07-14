@@ -913,6 +913,8 @@ const AVCI_DIR = path.join(require('os').homedir(), 'ai-saldiri-avcisi');
 const AVCI_EXPORT = path.join(__dirname, 'avci', 'notlara_aktar.py');
 const AVCI_MOTOR_LOG = path.join(__dirname, 'avci', 'motor.log');
 let avciMotor = { running: false, katalog: '', kapsam: '', startedAt: 0 };
+let avciBakim = { running: false, katalog: '', startedAt: 0 };
+const AVCI_BAKIM_LOG = path.join(__dirname, 'avci', 'bakim.log');
 function konseyPrompt(isim, soru, transcript) {
   return (
     `Sen '${isim}' adli bir yapay zekasin ve bir kanalda bir insan ile baska bir yapay zeka ` +
@@ -1341,6 +1343,43 @@ function handleApi(req, res, url) {
       child.on('exit', () => { avciMotor.running = false; try { broadcast({ type: 'avci-motor', done: true }); } catch {} });
       child.on('error', () => { avciMotor.running = false; });
       return txt(200, JSON.stringify({ started: true, katalog, kapsam }), 'application/json');
+    });
+  }
+
+  if (url.pathname === '/api/avci/bakim' && req.method === 'GET') {
+    if (!masterOnly()) return;
+    let log = '';
+    try { log = fs.readFileSync(AVCI_BAKIM_LOG, 'utf8').slice(-4000); } catch {}
+    return txt(200, JSON.stringify({ running: avciBakim.running, katalog: avciBakim.katalog, startedAt: avciBakim.startedAt, log }), 'application/json');
+  }
+
+  if (url.pathname === '/api/avci/bakim' && req.method === 'POST') {
+    if (!masterOnly() || !localOnly()) return;
+    return readBody(req, (err, body) => {
+      if (err) return txt(400, err);
+      if (avciBakim.running) return txt(429, 'bakim zaten calisiyor');
+      if (avciMotor.running) return txt(429, 'motor calisiyor, once bitmesini bekleyin');
+      const katalog = String((body && body.katalog) || 'ai').toLowerCase();
+      if (!['ai', 'web', 'silah'].includes(katalog)) return txt(400, 'gecersiz katalog');
+      // AI ayni-olay birlestirmesi opsiyonel (Codex CLI kullanir, yavas olabilir).
+      const ai = !!(body && body.ai === true);
+      const bakimArg = ai ? '--ai' : '';
+      // bakim.py senaryolari tekilleştirir -> katalogu tekrar notlara aktar.
+      const cmd = `cd ${JSON.stringify(AVCI_DIR)} && python3 bakim.py ${bakimArg} ; python3 ${JSON.stringify(AVCI_EXPORT)}`;
+      let child, out;
+      try {
+        fs.writeFileSync(AVCI_BAKIM_LOG, `# bakim basladi katalog=${katalog} ai=${ai} @${new Date().toISOString()}\n`);
+        out = fs.openSync(AVCI_BAKIM_LOG, 'a');
+        child = spawn('bash', ['-c', cmd], { env: {
+          ...KONSEY_ENV,
+          MOTOR_KATALOG: katalog,
+        }, stdio: ['ignore', out, out] });
+      } catch (spawnErr) { return txt(500, String(spawnErr.message || spawnErr)); }
+      try { fs.closeSync(out); } catch {}
+      avciBakim = { running: true, katalog, startedAt: Date.now() };
+      child.on('exit', () => { avciBakim.running = false; try { broadcast({ type: 'avci-bakim', done: true }); } catch {} });
+      child.on('error', () => { avciBakim.running = false; });
+      return txt(200, JSON.stringify({ started: true, katalog, ai }), 'application/json');
     });
   }
 
