@@ -29,6 +29,8 @@ npm start
 ```
 
 Ayar dosyası ilk açılışta `~/NotlarSync/app-config.json` olarak oluşur.
+Arama API anahtarları Ayarlar içindeki yerel alana girilebilir; değerler yalnızca
+`app-config.json` içinde `0600` izinle tutulur, not senkronuna ve GitHub yedeğine girmez.
 
 ## İki PC'yi bağlama
 

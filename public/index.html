@@ -819,6 +819,7 @@
       <div>
         <section class="settingsSection"><h3>Çalışma modu</h3><div class="settingRow"><label>Bu cihaz<small>Yerel kopya çevrimdışı çalışır. Uzak istemci yalnız eski kurulumlarla uyumluluk içindir.</small></label><select id="settingMode"><option value="host">Yerel kopya (önerilen)</option><option value="client">Eski uzak istemci</option></select></div><div class="settingRow"><label>Eski istemci sunucusu</label><input id="settingServer" placeholder="http://100.x.x.x:7777"></div><div class="settingRow"><label>Yerel port</label><input id="settingPort" type="number" min="1024" max="65535"></div></section>
         <section class="settingsSection"><h3>Yedek ve zihin</h3><div class="settingRow"><label>GitHub otomatik yedek<small>Değişiklikler sessizlikten sonra push edilir.</small></label><input id="settingGit" type="checkbox"></div><div class="settingRow"><label>Otomatik bağlantı önerileri</label><input id="settingOto" type="checkbox"></div><div class="settingRow"><label>Yerel cevap modeli</label><input id="settingModel" placeholder="qwen3:8b"></div><div class="settingRow"><label>Saldırı Avcısı adresi<small>Yalnız bu bilgisayardaki yerel servis kabul edilir.</small></label><input id="settingAvciUrl" placeholder="http://127.0.0.1:7788/"></div></section>
+        <section class="settingsSection"><h3>Arama API anahtarları</h3><p style="font-size:12px;color:var(--muted);margin:0 0 12px">Yalnız bu bilgisayarda tutulur; notlara, eşitlemeye ve GitHub yedeğine gönderilmez.</p><div class="settingRow"><label>GitHub Personal Access Token<small id="settingGithubState">Ayarlanmadı</small></label><input id="settingGithubToken" type="password" placeholder="Yeni token gir" autocomplete="off" spellcheck="false"></div><div class="settingRow"><label>NVD API key<small id="settingNvdState">Ayarlanmadı</small></label><input id="settingNvdKey" type="password" placeholder="Yeni anahtar gir" autocomplete="off" spellcheck="false"></div></section>
         <section class="settingsSection"><h3>Güvenlik</h3><div class="settingRow"><label>Yeni ana parola<small>Boş bırakırsan mevcut parola korunur.</small></label><input id="settingPassword" type="password" minlength="12" autocomplete="new-password"></div></section>
         <div id="settingsFeedback" style="font-size:12px;color:var(--muted);min-height:18px"></div>
       </div>
@@ -1763,6 +1764,10 @@ async function loadSettings() {
     $('settingOto').checked = data.otoZihin;
     $('settingModel').value = data.cevapModeli;
     $('settingAvciUrl').value = data.avciUrl || 'http://127.0.0.1:7788/';
+    $('settingGithubToken').value = '';
+    $('settingNvdKey').value = '';
+    $('settingGithubState').textContent = data.githubTokenSet ? 'Kayıtlı (değiştirmek için yeni token gir)' : 'Ayarlanmadı';
+    $('settingNvdState').textContent = data.nvdApiKeySet ? 'Kayıtlı (değiştirmek için yeni anahtar gir)' : 'Ayarlanmadı';
     $('settingsDataDir').textContent = data.dataDir;
   } catch (e) { $('settingsFeedback').textContent = e.message; }
 }
@@ -2064,6 +2069,10 @@ $('settingSave').onclick = async () => {
     cevapModeli: $('settingModel').value.trim(),
     avciUrl: $('settingAvciUrl').value.trim(),
   };
+  const githubToken = $('settingGithubToken').value.trim();
+  const nvdApiKey = $('settingNvdKey').value.trim();
+  if (githubToken) payload.githubToken = githubToken;
+  if (nvdApiKey) payload.nvdApiKey = nvdApiKey;
   if (password) payload.password = password;
   $('settingSave').disabled = true;
   $('settingsFeedback').textContent = 'Kaydediliyor...';
@@ -2078,6 +2087,9 @@ $('settingSave').onclick = async () => {
     $('settingsFeedback').textContent = result.restartRequired
       ? 'Kaydedildi. Mod, adres veya port değişikliği yeniden başlatmada uygulanacak.'
       : 'Değişiklikler kaydedildi.';
+    if (githubToken) $('settingGithubState').textContent = 'Kayıtlı (değiştirmek için yeni token gir)';
+    if (nvdApiKey) $('settingNvdState').textContent = 'Kayıtlı (değiştirmek için yeni anahtar gir)';
+    $('settingGithubToken').value = ''; $('settingNvdKey').value = '';
   } catch (e) { $('settingsFeedback').textContent = e.message; }
   $('settingSave').disabled = sessionRole !== 'master';
 };

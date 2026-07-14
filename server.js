@@ -1327,7 +1327,12 @@ function handleApi(req, res, url) {
       try {
         fs.writeFileSync(AVCI_MOTOR_LOG, `# motor basladi katalog=${katalog} mod=${ai ? 'ai' : 'python'} kapsam=${kapsam} @${new Date().toISOString()}\n`);
         out = fs.openSync(AVCI_MOTOR_LOG, 'a');
-        child = spawn('bash', ['-c', cmd], { env: { ...KONSEY_ENV, MOTOR_KATALOG: katalog }, stdio: ['ignore', out, out] });
+        child = spawn('bash', ['-c', cmd], { env: {
+          ...KONSEY_ENV,
+          MOTOR_KATALOG: katalog,
+          GITHUB_TOKEN: config.githubToken || '',
+          NVD_API_KEY: config.nvdApiKey || '',
+        }, stdio: ['ignore', out, out] });
       } catch (spawnErr) { return txt(500, String(spawnErr.message || spawnErr)); }
       try { fs.closeSync(out); } catch {}
       avciMotor = { running: true, katalog, kapsam, startedAt: Date.now() };
@@ -1610,6 +1615,8 @@ function handleApi(req, res, url) {
       cevapModeli: CEVAP_MODELI,
       avciUrl: (() => { try { return configuredAvciUrl(); } catch { return ''; } })(),
       claudeEnabled: !!config.claudeApiKey,
+      githubTokenSet: !!config.githubToken,
+      nvdApiKeySet: !!config.nvdApiKey,
       dataDir: DATA_DIR,
     }), 'application/json');
   }
@@ -1639,6 +1646,9 @@ function handleApi(req, res, url) {
       for (const k of ['gitAutoPush', 'otoZihin']) if (b[k] !== undefined) next[k] = !!b[k];
       for (const k of ['gitPushDelayMs', 'otoZihinSn']) if (b[k] !== undefined && Number(b[k]) > 0) next[k] = Number(b[k]);
       if (b.cevapModeli !== undefined) next.cevapModeli = String(b.cevapModeli).trim().slice(0, 80) || 'qwen3:8b';
+      for (const [k, max] of [['githubToken', 300], ['nvdApiKey', 300]]) {
+        if (b[k] !== undefined) next[k] = String(b[k] || '').trim().slice(0, max);
+      }
       if (b.avciUrl !== undefined) {
         try { next.avciUrl = normalizeAvciUrl(b.avciUrl); }
         catch (error) { return txt(400, String(error.message || error)); }
