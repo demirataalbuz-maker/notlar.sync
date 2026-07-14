@@ -78,13 +78,25 @@ def senaryo_yaz(kok_parts, grup_ad, kayitlar, tid):
         baslik = s.get("baslik") or s.get("url") or "senaryo"
         url = s.get("url", "")
         ek = re.sub(r'\s+', ' ', (s.get("ozet") or s.get("alinti") or "")).strip()
-        govde = f"**Kaynak:** {s.get('kaynak','')}\n\n"
+        skor = s.get("skor")
+        tur = s.get("kaynak_turu")
+        govde = f"**Kaynak:** {s.get('kaynak','')}"
+        if isinstance(skor, (int, float)):
+            rozet = "🟢" if skor >= 70 else ("🟡" if skor >= 45 else "🔴")
+            govde += f"  ·  **Güven puanı:** {rozet} {skor}/100"
+        if tur:
+            govde += f"  ·  _{tur}_"
+        govde += "\n\n"
         if url:
             govde += f"[{baslik}]({url})\n\n"
         if ek:
             govde += f"> {ek}\n"
-        yaz(list(kok_parts) + ["Senaryolar", grup_ad, baslik],
-            {"kategori": "Avcı-Senaryo", "teknik": tid, "kaynak": s.get("kaynak"), "url": url}, govde)
+        meta = {"kategori": "Avcı-Senaryo", "teknik": tid, "kaynak": s.get("kaynak"), "url": url}
+        if isinstance(skor, (int, float)):
+            meta["skor"] = skor
+        if tur:
+            meta["kaynak_turu"] = tur
+        yaz(list(kok_parts) + ["Senaryolar", grup_ad, baslik], meta, govde)
         say += 1
     return say
 
